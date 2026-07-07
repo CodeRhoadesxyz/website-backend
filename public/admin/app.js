@@ -446,22 +446,30 @@ function renderAnnouncementsTable(items) {
     return;
   }
 
+  const liveIndex = items.findIndex((a) => a.is_published && a.is_active);
+
   wrap.innerHTML = `
     <table>
       <thead><tr><th>Created</th><th>Title</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        ${items.map((a, i) => `
-          <tr>
-            <td class="mono">${fmtDate(a.created_at)}</td>
-            <td>${escapeHtml(a.title)}${i === 0 && a.is_published ? ' <span class="pill pill-approved">Live on site</span>' : ''}</td>
-            <td><span class="pill ${a.is_published ? 'pill-approved' : 'pill-archived'}">${a.is_published ? 'Published' : 'Draft'}</span></td>
-            <td style="white-space:nowrap;"><button class="btn-secondary" data-edit="${a.id}">Edit</button></td>
-          </tr>
-        `).join('')}
+        ${items.map((a, i) => {
+          const statusLabel = !a.is_published ? 'Draft' : !a.is_active ? 'Inactive' : 'Published';
+          const statusClass = !a.is_published ? 'pill-archived' : !a.is_active ? 'pill-declined' : 'pill-approved';
+          return `
+            <tr>
+              <td class="mono">${fmtDate(a.created_at)}</td>
+              <td>${escapeHtml(a.title)}${i === liveIndex ? ' <span class="pill pill-approved">Live on site</span>' : ''}</td>
+              <td><span class="pill ${statusClass}">${statusLabel}</span></td>
+              <td style="white-space:nowrap;"><button class="btn-secondary" data-edit="${a.id}">Edit</button></td>
+            </tr>
+          `;
+        }).join('')}
       </tbody>
     </table>
     <p style="color:var(--muted); font-size:0.82rem; margin-top:0.75rem;">
-      The homepage banner always shows only the newest <em>published</em> announcement, so older ones here are just kept as a history — no need to delete them.
+      The homepage banner always shows only the newest <em>published</em> announcement that's still active.
+      Announcements automatically go <strong>Inactive</strong> (hidden from visitors) 5 days after they're
+      created — they aren't deleted, so you can still see them here and delete them yourself whenever you like.
     </p>
   `;
 

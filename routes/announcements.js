@@ -4,20 +4,36 @@ const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
+const EXPIRY_DAYS = 5;
+
 // --- Public: the single most recent published announcement (or null) ---
 // The homepage widget calls this — it's intentionally "one at a time" so the
 // banner never gets bulky, no matter how many announcements pile up in admin.
+// Anything older than EXPIRY_DAYS is excluded here (but not deleted — it
+// just stops being shown to visitors; see the admin list route below).
 router.get('/latest', (req, res) => {
   const announcement = db
-    .prepare('SELECT * FROM announcements WHERE is_published = 1 ORDER BY created_at DESC LIMIT 1')
+    .prepare(
+      `SELECT * FROM announcements
+       WHERE is_published = 1 AND created_at >= datetime('now', '-${EXPIRY_DAYS} days')
+       ORDER BY created_at DESC LIMIT 1`
+    )
     .get();
   res.json(announcement || null);
 });
 
 // --- Admin: list all announcements ---
+// Nothing is ever auto-deleted — old announcements stay here permanently
+// (until an admin deletes them) with is_active: false once they pass
+// EXPIRY_DAYS, so the admin panel can show an "Inactive" tag.
 router.get('/', requireAdmin, (req, res) => {
   const rows = db.prepare('SELECT * FROM announcements ORDER BY created_at DESC').all();
-  res.json(rows);
+  const cutoff = Date.now() - EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+  const withActiveFlag = rows.map((row) => {
+    const createdAtMs = new Date(row.created_at.replace(' ', 'T') + 'Z').getTime();
+    return { ...row, is_active: createdAtMs >= cutoff };
+  });
+  res.json(withActiveFlag);
 });
 
 // --- Admin: create ---
