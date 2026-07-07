@@ -223,18 +223,26 @@ async function openApplicationModal(id) {
   document.getElementById('save-app').addEventListener('click', async () => {
     const status = document.getElementById('status-select').value;
     const admin_notes = document.getElementById('notes-field').value;
-    await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ status, admin_notes }) });
-    toast('Application updated.');
-    closeModal();
-    loadApplications(currentTab);
+    try {
+      await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ status, admin_notes }) });
+      toast('Application updated.');
+      closeModal();
+      loadApplications(currentTab);
+    } catch (err) {
+      alert(`Could not save changes: ${err.message}`);
+    }
   });
 
   document.getElementById('delete-app').addEventListener('click', async () => {
     if (!confirm('Delete this application permanently?')) return;
-    await api(`/api/applications/${id}`, { method: 'DELETE' });
-    toast('Application deleted.');
-    closeModal();
-    loadApplications(currentTab);
+    try {
+      await api(`/api/applications/${id}`, { method: 'DELETE' });
+      toast('Application deleted.');
+      closeModal();
+      loadApplications(currentTab);
+    } catch (err) {
+      alert(`Could not delete: ${err.message}`);
+    }
   });
 }
 
@@ -347,24 +355,32 @@ function openEventModal(event) {
       return;
     }
 
-    if (isEdit) {
-      await api(`/api/events/${event.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-      toast('Event updated.');
-    } else {
-      await api('/api/events', { method: 'POST', body: JSON.stringify(payload) });
-      toast('Event created.');
+    try {
+      if (isEdit) {
+        await api(`/api/events/${event.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        toast('Event updated.');
+      } else {
+        await api('/api/events', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Event created.');
+      }
+      closeModal();
+      loadEvents();
+    } catch (err) {
+      alert(`Could not save changes: ${err.message}`);
     }
-    closeModal();
-    loadEvents();
   });
 
   if (isEdit) {
     document.getElementById('delete-event').addEventListener('click', async () => {
       if (!confirm('Delete this event and all its RSVPs?')) return;
-      await api(`/api/events/${event.id}`, { method: 'DELETE' });
-      toast('Event deleted.');
-      closeModal();
-      loadEvents();
+      try {
+        await api(`/api/events/${event.id}`, { method: 'DELETE' });
+        toast('Event deleted.');
+        closeModal();
+        loadEvents();
+      } catch (err) {
+        alert(`Could not delete: ${err.message}`);
+      }
     });
   }
 }
@@ -504,24 +520,32 @@ function openAnnouncementModal(announcement) {
       return;
     }
 
-    if (isEdit) {
-      await api(`/api/announcements/${announcement.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-      toast('Announcement updated.');
-    } else {
-      await api('/api/announcements', { method: 'POST', body: JSON.stringify(payload) });
-      toast('Announcement created.');
+    try {
+      if (isEdit) {
+        await api(`/api/announcements/${announcement.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        toast('Announcement updated.');
+      } else {
+        await api('/api/announcements', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Announcement created.');
+      }
+      closeModal();
+      loadAnnouncements();
+    } catch (err) {
+      alert(`Could not save changes: ${err.message}`);
     }
-    closeModal();
-    loadAnnouncements();
   });
 
   if (isEdit) {
     document.getElementById('delete-announcement').addEventListener('click', async () => {
       if (!confirm('Delete this announcement permanently?')) return;
-      await api(`/api/announcements/${announcement.id}`, { method: 'DELETE' });
-      toast('Announcement deleted.');
-      closeModal();
-      loadAnnouncements();
+      try {
+        await api(`/api/announcements/${announcement.id}`, { method: 'DELETE' });
+        toast('Announcement deleted.');
+        closeModal();
+        loadAnnouncements();
+      } catch (err) {
+        alert(`Could not delete: ${err.message}`);
+      }
     });
   }
 }
