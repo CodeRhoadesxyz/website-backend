@@ -9,6 +9,7 @@ const STATUS_LABELS = {
 };
 
 const TAB_TITLES = {
+  home: 'Home',
   adoption: 'Adoption applications',
   relinquishment: 'Relinquishment applications',
   volunteer: 'Volunteer applications',
@@ -94,7 +95,7 @@ async function boot() {
     window.location.href = './login.html';
   });
 
-  switchTab('adoption');
+  switchTab('home');
 }
 
 function switchTab(tab) {
@@ -102,19 +103,24 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-tab[data-tab]').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
   document.getElementById('view-title').textContent = TAB_TITLES[tab];
 
+  const homeView = document.getElementById('home-view');
   const appView = document.getElementById('app-view');
   const eventsView = document.getElementById('events-view');
   const announcementsView = document.getElementById('announcements-view');
   const birdsView = document.getElementById('birds-view');
   const communityView = document.getElementById('community-view');
 
+  homeView.style.display = 'none';
   appView.style.display = 'none';
   eventsView.style.display = 'none';
   announcementsView.style.display = 'none';
   birdsView.style.display = 'none';
   communityView.style.display = 'none';
 
-  if (tab === 'events') {
+  if (tab === 'home') {
+    homeView.style.display = 'block';
+    loadHome();
+  } else if (tab === 'events') {
     eventsView.style.display = 'block';
     loadEvents();
   } else if (tab === 'announcements') {
@@ -900,6 +906,47 @@ function renderCommunityUsers(users) {
         alert(`Could not delete: ${err.message}`);
       }
     })
+  );
+}
+
+// ---------- home dashboard ----------
+
+async function loadHome() {
+  const view = document.getElementById('home-view');
+  view.innerHTML = `<div id="home-stats-wrap">Loading…</div>`;
+
+  try {
+    const stats = await api('/api/stats');
+    renderHomeStats(stats);
+  } catch (e) {
+    document.getElementById('home-stats-wrap').innerHTML = `<div class="empty-state">Could not load stats.</div>`;
+  }
+}
+
+function renderHomeStats(stats) {
+  const wrap = document.getElementById('home-stats-wrap');
+
+  const cards = [
+    { key: 'adoption', label: 'Adoption applications', total: stats.adoption.total, sub: `${stats.adoption.new} new` },
+    { key: 'relinquishment', label: 'Relinquishment applications', total: stats.relinquishment.total, sub: `${stats.relinquishment.new} new` },
+    { key: 'events', label: 'Event RSVPs', total: stats.rsvps.total, sub: 'across all events' },
+  ];
+
+  wrap.innerHTML = `
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+      ${cards.map((c) => `
+        <div class="card home-stat-card" data-goto="${c.key}" style="cursor:pointer;">
+          <div style="font-size:2.2rem; font-weight:700; font-family:'Fraunces', serif; color:var(--canopy);">${c.total}</div>
+          <div style="font-weight:600; margin-bottom:0.15rem;">${c.label}</div>
+          <div class="mono" style="color:var(--muted); font-size:0.8rem;">${c.sub}</div>
+        </div>
+      `).join('')}
+    </div>
+    <p style="color:var(--muted); font-size:0.85rem;">Click a card to jump to that section.</p>
+  `;
+
+  wrap.querySelectorAll('[data-goto]').forEach((card) =>
+    card.addEventListener('click', () => switchTab(card.dataset.goto))
   );
 }
 

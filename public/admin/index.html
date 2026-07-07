@@ -13,7 +13,8 @@
     <div class="sidebar">
       <div class="brand">Heart &amp; Soul<br />Admin</div>
       <a href="/" class="nav-tab" id="back-home-link">← Back to website</a>
-      <div class="nav-tab active" data-tab="adoption">Adoption applications</div>
+      <div class="nav-tab active" data-tab="home">Home</div>
+      <div class="nav-tab" data-tab="adoption">Adoption applications</div>
       <div class="nav-tab" data-tab="relinquishment">Relinquishment applications</div>
       <div class="nav-tab" data-tab="volunteer">Volunteer applications</div>
       <div class="nav-tab" data-tab="birds">Adoptable birds</div>
@@ -26,11 +27,12 @@
 
     <div class="main">
       <div class="topbar">
-        <h2 id="view-title">Adoption applications</h2>
+        <h2 id="view-title">Home</h2>
         <span class="mono" id="signed-in-as" style="color:var(--muted); font-size:0.85rem;"></span>
       </div>
 
-      <div id="app-view"></div>
+      <div id="home-view"></div>
+      <div id="app-view" style="display:none;"></div>
       <div id="events-view" style="display:none;"></div>
       <div id="announcements-view" style="display:none;"></div>
       <div id="birds-view" style="display:none;"></div>
