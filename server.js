@@ -59,11 +59,20 @@ app.use('/api/announcements', announcementRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-// Serve the admin dashboard (plain HTML/JS, no build step)
-app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
+// Serve the admin dashboard (plain HTML/JS, no build step).
+// Cache-Control: no-cache forces the browser to revalidate with the server
+// on every load instead of silently serving a stale cached copy after a
+// deploy — important here since these are hand-edited files that change
+// fairly often.
+const noCacheStatic = (dir) =>
+  express.static(dir, {
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+  });
+
+app.use('/admin', noCacheStatic(path.join(__dirname, 'public/admin')));
 
 // Serve embeddable widget JS/CSS that the main website links to
-app.use('/widgets', express.static(path.join(__dirname, 'public/widgets')));
+app.use('/widgets', noCacheStatic(path.join(__dirname, 'public/widgets')));
 
 app.use((err, req, res, next) => {
   console.error(err);

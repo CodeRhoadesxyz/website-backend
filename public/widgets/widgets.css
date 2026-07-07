@@ -71,6 +71,14 @@
   border-radius: 20px;
   padding: 1.1rem 1.3rem;
   margin-bottom: 0.9rem;
+  overflow: hidden;
+}
+.rescue-widget .rw-event-image {
+  display: block;
+  width: calc(100% + 2.6rem);
+  margin: -1.1rem -1.3rem 0.9rem;
+  max-height: 220px;
+  object-fit: cover;
 }
 .rescue-widget .rw-event-title {
   font-family: 'Fraunces', Georgia, serif;

@@ -28,6 +28,7 @@
         <div class="rescue-widget">
           ${events.map((ev) => `
             <div class="rw-event-card" id="rw-event-${ev.id}">
+              ${ev.image_url ? `<img class="rw-event-image" src="${escapeHtml(ev.image_url)}" alt="${escapeHtml(ev.title)}" />` : ''}
               <div class="rw-event-title">${escapeHtml(ev.title)}</div>
               <div class="rw-event-meta">
                 ${fmt(ev.start_time)}${ev.location ? ' · ' + escapeHtml(ev.location) : ''}

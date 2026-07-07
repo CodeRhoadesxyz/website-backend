@@ -1,14 +1,17 @@
 :root {
-  /* Palette pulled from the live site: sage forest green + dusty coral + warm cream */
-  --canopy: #4f7358;
-  --canopy-dark: #1f3a2c;
+  /* Permanent dark theme for the admin panel — brand green + coral accent,
+     kept from the live site's palette, on a dark neutral surface. */
+  --canopy: #6b9678;
+  --canopy-dark: #4f7358;
   --coral: #d98872;
-  --cream: #f3efe5;
-  --charcoal: #33383a;
-  --danger: #c1554a;
-  --muted: #7c8f86;
-  --line: #dde3d6;
-  --info: #6c8fae;
+  --bg: #14181a;
+  --surface: #1c2420;
+  --text: #ece7da;
+  --heading: #f2efe6;
+  --danger: #e07268;
+  --muted: #9aa79f;
+  --line: rgba(255,255,255,0.09);
+  --info: #8fb4d6;
   --radius: 18px;
   --radius-pill: 999px;
 }
@@ -17,8 +20,8 @@
 
 body {
   margin: 0;
-  background: var(--cream);
-  color: var(--charcoal);
+  background: var(--bg);
+  color: var(--text);
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -26,11 +29,11 @@ body {
 h1, h2, h3 {
   font-family: 'Fraunces', Georgia, serif;
   font-weight: 600;
-  color: var(--canopy-dark);
+  color: var(--heading);
   margin: 0 0 0.4em 0;
 }
 
-a { color: var(--canopy); }
+a { color: var(--coral); }
 
 .mono { font-family: 'JetBrains Mono', monospace; }
 
@@ -41,19 +44,19 @@ a { color: var(--canopy); }
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(circle at 15% 20%, rgba(244,163,0,0.12), transparent 40%),
-    radial-gradient(circle at 85% 80%, rgba(46,94,170,0.12), transparent 40%),
-    var(--cream);
+    radial-gradient(circle at 15% 20%, rgba(217,136,114,0.08), transparent 40%),
+    radial-gradient(circle at 85% 80%, rgba(79,115,88,0.12), transparent 40%),
+    var(--bg);
 }
 
 .login-card {
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 2.5rem 2.25rem;
   width: 100%;
   max-width: 380px;
-  box-shadow: 0 12px 32px rgba(15, 43, 30, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
 }
 
 .login-card .eyebrow {
@@ -79,8 +82,8 @@ input, textarea, select {
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.95rem;
-  background: #fff;
-  color: var(--charcoal);
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
 }
 
 input:focus, textarea:focus, select:focus {
@@ -98,10 +101,10 @@ button {
   font-size: 0.92rem;
 }
 
-.btn-primary { background: var(--canopy); color: #fff; }
-.btn-primary:hover { background: var(--canopy-dark); }
-.btn-secondary { background: #fff; color: var(--canopy); border: 1px solid var(--canopy); }
-.btn-danger { background: var(--danger); color: #fff; }
+.btn-primary { background: var(--canopy); color: #10160f; }
+.btn-primary:hover { background: var(--canopy-dark); color: #fff; }
+.btn-secondary { background: transparent; color: var(--canopy); border: 1px solid var(--canopy); }
+.btn-danger { background: var(--danger); color: #1a1414; }
 .btn-ghost { background: transparent; color: var(--muted); border-radius: 8px; }
 
 .error-text { color: var(--danger); font-size: 0.85rem; margin-top: 0.6rem; min-height: 1.1em; }
@@ -111,7 +114,7 @@ button {
 
 .sidebar {
   width: 220px;
-  background: var(--canopy);
+  background: var(--canopy-dark);
   color: #fff;
   padding: 1.5rem 1rem;
   display: flex;
@@ -166,31 +169,31 @@ button {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-.pill-new { background: rgba(217,136,114,0.18); color: #a15239; }
-.pill-in_review { background: rgba(108,143,174,0.16); color: var(--info); }
-.pill-approved { background: rgba(27,67,50,0.14); color: var(--canopy); }
-.pill-declined { background: rgba(193,85,74,0.14); color: var(--danger); }
-.pill-archived { background: rgba(124,143,134,0.16); color: var(--muted); }
+.pill-new { background: rgba(217,136,114,0.25); color: #f0b9a8; }
+.pill-in_review { background: rgba(143,180,214,0.22); color: #aecfe8; }
+.pill-approved { background: rgba(107,150,120,0.28); color: #a8dab6; }
+.pill-declined { background: rgba(224,114,104,0.25); color: #f0aca4; }
+.pill-archived { background: rgba(154,167,159,0.2); color: #c7d1cb; }
 
-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: var(--radius); overflow: hidden; }
+table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; }
 th, td { text-align: left; padding: 0.65rem 0.8rem; border-bottom: 1px solid var(--line); font-size: 0.9rem; }
-th { background: #f4f0e4; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-tr:hover td { background: #fbf9f3; }
+th { background: rgba(255,255,255,0.04); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+tr:hover td { background: rgba(255,255,255,0.03); }
 tr.clickable { cursor: pointer; }
 
 .filters { display: flex; gap: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .filters select { width: auto; }
 
-.card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem 1.4rem; margin-bottom: 1rem; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem 1.4rem; margin-bottom: 1rem; }
 
 .modal-backdrop {
-  position: fixed; inset: 0; background: rgba(15,43,30,0.45);
+  position: fixed; inset: 0; background: rgba(0,0,0,0.55);
   display: flex; align-items: flex-start; justify-content: center;
   padding: 4vh 1rem; overflow-y: auto; z-index: 50;
 }
 .modal {
-  background: #fff; border-radius: var(--radius); width: 100%; max-width: 560px;
-  padding: 1.75rem; box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 560px;
+  padding: 1.75rem; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
 }
 .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
 
@@ -202,7 +205,7 @@ tr.clickable { cursor: pointer; }
   text-align: center;
   padding: 3rem 1rem;
   color: var(--muted);
-  background: #fff;
+  background: var(--surface);
   border-radius: var(--radius);
   border: 1px dashed var(--line);
 }
@@ -211,7 +214,7 @@ tr.clickable { cursor: pointer; }
   position: fixed; bottom: 1.5rem; right: 1.5rem;
   background: var(--canopy-dark); color: #fff;
   padding: 0.7rem 1.1rem; border-radius: 8px; font-size: 0.9rem;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
   z-index: 100;
 }
 
@@ -221,60 +224,4 @@ tr.clickable { cursor: pointer; }
   .sidebar .brand, .sidebar .spacer { display: none; }
   .main { padding: 1.25rem; }
   .field-grid, .field-grid .half { grid-column: span 2; }
-}
-
-/* --- Dark mode --- */
-/* Follows the browser/OS setting automatically. The sidebar stays the same
-   brand green either way since it's already dark; everything else (page
-   background, cards, tables, modals, inputs) swaps to a dark neutral
-   surface with light text instead of white-on-cream. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --dark-bg: #14181a;
-    --dark-surface: #1c2420;
-    --dark-border: rgba(255,255,255,0.09);
-    --dark-text: #ece7da;
-    --dark-text-muted: #9aa79f;
-    --canopy-light: #86ab8f;
-  }
-
-  body { background: var(--dark-bg); color: var(--dark-text); }
-  h1, h2, h3 { color: #f2efe6; }
-  a { color: var(--coral); }
-
-  .login-wrap {
-    background:
-      radial-gradient(circle at 15% 20%, rgba(217,136,114,0.08), transparent 40%),
-      radial-gradient(circle at 85% 80%, rgba(79,115,88,0.10), transparent 40%),
-      var(--dark-bg);
-  }
-  .login-card {
-    background: var(--dark-surface);
-    border-color: var(--dark-border);
-    box-shadow: 0 12px 32px rgba(0,0,0,0.35);
-  }
-
-  input, textarea, select {
-    background: rgba(255,255,255,0.05);
-    border-color: var(--dark-border);
-    color: var(--dark-text);
-  }
-
-  .btn-secondary { background: transparent; color: var(--canopy-light); border-color: var(--canopy-light); }
-  .btn-ghost { color: var(--dark-text-muted); }
-
-  table { background: var(--dark-surface); }
-  th { background: rgba(255,255,255,0.04); color: var(--dark-text-muted); }
-  th, td { border-bottom-color: var(--dark-border); }
-  tr:hover td { background: rgba(255,255,255,0.03); }
-
-  .card { background: var(--dark-surface); border-color: var(--dark-border); }
-  .modal { background: var(--dark-surface); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
-  .empty-state { background: var(--dark-surface); border-color: var(--dark-border); color: var(--dark-text-muted); }
-
-  .pill-new { background: rgba(217,136,114,0.25); color: #f0b9a8; }
-  .pill-in_review { background: rgba(108,143,174,0.22); color: #aac6dc; }
-  .pill-approved { background: rgba(79,115,88,0.28); color: #9fd1ac; }
-  .pill-declined { background: rgba(193,85,74,0.25); color: #eb9c92; }
-  .pill-archived { background: rgba(154,167,159,0.2); color: #c7d1cb; }
 }
