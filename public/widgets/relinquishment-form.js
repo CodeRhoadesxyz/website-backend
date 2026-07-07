@@ -1,7 +1,17 @@
 (function () {
   const scriptEl = document.currentScript;
-  const apiBase = window.RescueWidgets.getApiBase(scriptEl);
   const containerId = scriptEl.dataset.target || 'rescue-relinquishment-form';
+
+  if (!window.RescueWidgets || typeof window.RescueWidgets.renderForm !== 'function') {
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.innerHTML = '<p style="color:#c1554a; font-size:0.9rem;">This form failed to load — shared.js and form-builder.js must both be included on this page before relinquishment-form.js.</p>';
+    }
+    console.error('Rescue widget: shared.js and form-builder.js must be loaded before relinquishment-form.js.');
+    return;
+  }
+
+  const apiBase = window.RescueWidgets.getApiBase(scriptEl);
 
   window.RescueWidgets.renderForm(containerId, {
     type: 'relinquishment',
