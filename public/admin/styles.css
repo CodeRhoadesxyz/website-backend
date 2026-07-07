@@ -222,3 +222,59 @@ tr.clickable { cursor: pointer; }
   .main { padding: 1.25rem; }
   .field-grid, .field-grid .half { grid-column: span 2; }
 }
+
+/* --- Dark mode --- */
+/* Follows the browser/OS setting automatically. The sidebar stays the same
+   brand green either way since it's already dark; everything else (page
+   background, cards, tables, modals, inputs) swaps to a dark neutral
+   surface with light text instead of white-on-cream. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dark-bg: #14181a;
+    --dark-surface: #1c2420;
+    --dark-border: rgba(255,255,255,0.09);
+    --dark-text: #ece7da;
+    --dark-text-muted: #9aa79f;
+    --canopy-light: #86ab8f;
+  }
+
+  body { background: var(--dark-bg); color: var(--dark-text); }
+  h1, h2, h3 { color: #f2efe6; }
+  a { color: var(--coral); }
+
+  .login-wrap {
+    background:
+      radial-gradient(circle at 15% 20%, rgba(217,136,114,0.08), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(79,115,88,0.10), transparent 40%),
+      var(--dark-bg);
+  }
+  .login-card {
+    background: var(--dark-surface);
+    border-color: var(--dark-border);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+  }
+
+  input, textarea, select {
+    background: rgba(255,255,255,0.05);
+    border-color: var(--dark-border);
+    color: var(--dark-text);
+  }
+
+  .btn-secondary { background: transparent; color: var(--canopy-light); border-color: var(--canopy-light); }
+  .btn-ghost { color: var(--dark-text-muted); }
+
+  table { background: var(--dark-surface); }
+  th { background: rgba(255,255,255,0.04); color: var(--dark-text-muted); }
+  th, td { border-bottom-color: var(--dark-border); }
+  tr:hover td { background: rgba(255,255,255,0.03); }
+
+  .card { background: var(--dark-surface); border-color: var(--dark-border); }
+  .modal { background: var(--dark-surface); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+  .empty-state { background: var(--dark-surface); border-color: var(--dark-border); color: var(--dark-text-muted); }
+
+  .pill-new { background: rgba(217,136,114,0.25); color: #f0b9a8; }
+  .pill-in_review { background: rgba(108,143,174,0.22); color: #aac6dc; }
+  .pill-approved { background: rgba(79,115,88,0.28); color: #9fd1ac; }
+  .pill-declined { background: rgba(193,85,74,0.25); color: #eb9c92; }
+  .pill-archived { background: rgba(154,167,159,0.2); color: #c7d1cb; }
+}
