@@ -28,7 +28,7 @@
 
       container.style.display = '';
       container.innerHTML = `
-        <div class="rescue-widget">
+        <div class="rescue-widget rw-announcement-wrap">
           <div class="rw-announcement">
             <span class="rw-a-dot"></span>
             <span class="rw-a-title">${escapeHtml(announcement.title)}</span>

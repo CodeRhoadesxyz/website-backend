@@ -94,6 +94,10 @@
 .rescue-widget .rw-rsvp-btn:hover { background: rgba(79,115,88,0.08); }
 
 /* --- Announcement banner: deliberately slim, no card/box treatment --- */
+.rescue-widget.rw-announcement-wrap {
+  max-width: none;
+  width: 100%;
+}
 .rw-announcement {
   display: flex;
   align-items: center;
