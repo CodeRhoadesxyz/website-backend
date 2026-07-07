@@ -13,6 +13,7 @@ const TAB_TITLES = {
   relinquishment: 'Relinquishment applications',
   volunteer: 'Volunteer applications',
   events: 'Events',
+  announcements: 'News announcements',
 };
 
 let currentTab = 'adoption';
@@ -95,14 +96,20 @@ function switchTab(tab) {
 
   const appView = document.getElementById('app-view');
   const eventsView = document.getElementById('events-view');
+  const announcementsView = document.getElementById('announcements-view');
+
+  appView.style.display = 'none';
+  eventsView.style.display = 'none';
+  announcementsView.style.display = 'none';
 
   if (tab === 'events') {
-    appView.style.display = 'none';
     eventsView.style.display = 'block';
     loadEvents();
+  } else if (tab === 'announcements') {
+    announcementsView.style.display = 'block';
+    loadAnnouncements();
   } else {
     appView.style.display = 'block';
-    eventsView.style.display = 'none';
     loadApplications(tab);
   }
 }
@@ -388,6 +395,129 @@ async function openRsvpModal(eventId) {
   document.getElementById('modal-backdrop').addEventListener('click', (e) => {
     if (e.target.id === 'modal-backdrop') closeModal();
   });
+}
+
+// ---------- announcements ----------
+
+async function loadAnnouncements() {
+  const view = document.getElementById('announcements-view');
+  view.innerHTML = `
+    <div style="margin-bottom:1rem;">
+      <button class="btn-primary" id="new-announcement-btn">+ Add announcement</button>
+    </div>
+    <div id="announcements-table-wrap">Loading…</div>
+  `;
+  document.getElementById('new-announcement-btn').addEventListener('click', () => openAnnouncementModal());
+
+  try {
+    const items = await api('/api/announcements');
+    renderAnnouncementsTable(items);
+  } catch (e) {
+    document.getElementById('announcements-table-wrap').innerHTML = `<div class="empty-state">Could not load announcements.</div>`;
+  }
+}
+
+function renderAnnouncementsTable(items) {
+  const wrap = document.getElementById('announcements-table-wrap');
+  if (items.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No announcements yet. The homepage banner stays hidden until you publish one.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Created</th><th>Title</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${items.map((a, i) => `
+          <tr>
+            <td class="mono">${fmtDate(a.created_at)}</td>
+            <td>${escapeHtml(a.title)}${i === 0 && a.is_published ? ' <span class="pill pill-approved">Live on site</span>' : ''}</td>
+            <td><span class="pill ${a.is_published ? 'pill-approved' : 'pill-archived'}">${a.is_published ? 'Published' : 'Draft'}</span></td>
+            <td style="white-space:nowrap;"><button class="btn-secondary" data-edit="${a.id}">Edit</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <p style="color:var(--muted); font-size:0.82rem; margin-top:0.75rem;">
+      The homepage banner always shows only the newest <em>published</em> announcement, so older ones here are just kept as a history — no need to delete them.
+    </p>
+  `;
+
+  wrap.querySelectorAll('[data-edit]').forEach((btn) =>
+    btn.addEventListener('click', () => openAnnouncementModal(items.find((a) => a.id == btn.dataset.edit)))
+  );
+}
+
+function openAnnouncementModal(announcement) {
+  const isEdit = Boolean(announcement);
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>${isEdit ? 'Edit announcement' : 'New announcement'}</h3>
+          <button class="btn-ghost" id="modal-close">✕</button>
+        </div>
+        <label>Title</label>
+        <input id="an-title" value="${escapeHtml(announcement?.title || '')}" placeholder="e.g. We're at capacity — foster homes needed" />
+        <label>Message</label>
+        <textarea id="an-message" rows="3" placeholder="Keep it short — this shows as a slim banner on the homepage.">${escapeHtml(announcement?.message || '')}</textarea>
+        <div class="field-grid">
+          <div class="half"><label>Link URL (optional)</label><input id="an-link-url" value="${escapeHtml(announcement?.link_url || '')}" placeholder="https://..." /></div>
+          <div class="half"><label>Link text (optional)</label><input id="an-link-text" value="${escapeHtml(announcement?.link_text || '')}" placeholder="e.g. Learn more" /></div>
+          <div><label>Status</label>
+            <select id="an-published">
+              <option value="1" ${announcement?.is_published !== 0 ? 'selected' : ''}>Published</option>
+              <option value="0" ${announcement?.is_published === 0 ? 'selected' : ''}>Draft</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
+          ${isEdit ? `<button class="btn-danger" id="delete-announcement">Delete</button>` : `<span></span>`}
+          <button class="btn-primary" id="save-announcement">${isEdit ? 'Save changes' : 'Create'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-backdrop') closeModal();
+  });
+
+  document.getElementById('save-announcement').addEventListener('click', async () => {
+    const payload = {
+      title: document.getElementById('an-title').value.trim(),
+      message: document.getElementById('an-message').value.trim(),
+      link_url: document.getElementById('an-link-url').value.trim(),
+      link_text: document.getElementById('an-link-text').value.trim(),
+      is_published: document.getElementById('an-published').value === '1',
+    };
+
+    if (!payload.title || !payload.message) {
+      alert('Title and message are required.');
+      return;
+    }
+
+    if (isEdit) {
+      await api(`/api/announcements/${announcement.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      toast('Announcement updated.');
+    } else {
+      await api('/api/announcements', { method: 'POST', body: JSON.stringify(payload) });
+      toast('Announcement created.');
+    }
+    closeModal();
+    loadAnnouncements();
+  });
+
+  if (isEdit) {
+    document.getElementById('delete-announcement').addEventListener('click', async () => {
+      if (!confirm('Delete this announcement permanently?')) return;
+      await api(`/api/announcements/${announcement.id}`, { method: 'DELETE' });
+      toast('Announcement deleted.');
+      closeModal();
+      loadAnnouncements();
+    });
+  }
 }
 
 boot();

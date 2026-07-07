@@ -55,10 +55,22 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS announcements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    link_url TEXT DEFAULT '',
+    link_text TEXT DEFAULT '',
+    is_published INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_applications_type ON applications(type);
   CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
   CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_time);
   CREATE INDEX IF NOT EXISTS idx_rsvps_event ON rsvps(event_id);
+  CREATE INDEX IF NOT EXISTS idx_announcements_published ON announcements(is_published, created_at);
 `);
 
 module.exports = db;

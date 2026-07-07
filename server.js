@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const authRoutes = require('./routes/auth');
 const applicationRoutes = require('./routes/applications');
 const eventRoutes = require('./routes/events');
+const announcementRoutes = require('./routes/announcements');
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use(cookieParser());
 app.use('/api/auth', authRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/announcements', announcementRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
