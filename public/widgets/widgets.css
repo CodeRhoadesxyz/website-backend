@@ -130,3 +130,42 @@
   .rw-announcement { flex-wrap: wrap; border-radius: 20px; text-align: left; }
   .rw-announcement .rw-a-link { margin-left: 0; }
 }
+
+/* --- Dark mode --- */
+/* The colors above assume a light/cream background. On a dark background,
+   the same values (dark green, dark gray) read as near-black and become
+   hard to see, so this swaps them for neutral light tones instead. */
+@media (prefers-color-scheme: dark) {
+  .rescue-widget h3 { color: #f2efe6; }
+
+  .rescue-widget input,
+  .rescue-widget textarea,
+  .rescue-widget select {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.2);
+    color: #f2efe6;
+  }
+
+  .rescue-widget .rw-success {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.25);
+    color: #f2efe6;
+  }
+
+  .rescue-widget .rw-event-card { border-color: rgba(255,255,255,0.18); }
+  .rescue-widget .rw-event-title { color: #f2efe6; }
+  .rescue-widget .rw-event-meta { color: #c9c9c9; }
+  .rescue-widget .rw-event-desc { color: #ddd8ca; }
+
+  .rescue-widget .rw-rsvp-btn {
+    background: transparent;
+    color: #f2efe6;
+    border-color: rgba(255,255,255,0.4);
+  }
+  .rescue-widget .rw-rsvp-btn:hover { background: rgba(255,255,255,0.08); }
+
+  .rw-announcement {
+    background: rgba(255,255,255,0.07);
+    color: #f2efe6;
+  }
+}
