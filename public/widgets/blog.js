@@ -22,6 +22,16 @@
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  // Renders a small round avatar image, or a circle with the person's first
+  // initial if they haven't set a profile picture.
+  function avatarHtml(name, url, size) {
+    if (url) {
+      return `<img class="rw-blog-avatar" style="width:${size}px;height:${size}px;" src="${escapeHtml(url)}" alt="" />`;
+    }
+    const initial = (name || '?').trim().charAt(0).toUpperCase();
+    return `<span class="rw-blog-avatar rw-blog-avatar-fallback" style="width:${size}px;height:${size}px;line-height:${size}px;font-size:${Math.round(size * 0.45)}px;">${escapeHtml(initial)}</span>`;
+  }
+
   function getRoute() {
     const match = window.location.hash.match(/^#post-(\d+)/);
     return match ? { view: 'post', id: match[1] } : { view: 'list' };
@@ -68,15 +78,21 @@
     if (currentUser) {
       bar.innerHTML = `
         <div class="rw-blog-authbar">
-          <span>Signed in as <strong>${escapeHtml(currentUser.display_name)}</strong></span>
+          <span style="display:flex; align-items:center; gap:0.5rem;">
+            ${avatarHtml(currentUser.display_name, currentUser.avatar_url, 28)}
+            Signed in as <strong>${escapeHtml(currentUser.display_name)}</strong>
+          </span>
           <div>
             <button class="rw-blog-link-btn" id="rw-new-post-btn">+ New post</button>
+            <button class="rw-blog-link-btn" id="rw-edit-profile-btn">Edit profile</button>
             <button class="rw-blog-link-btn" id="rw-logout-btn">Log out</button>
           </div>
         </div>
+        <div id="rw-profile-form-slot"></div>
         <div id="rw-composer-slot"></div>
       `;
       document.getElementById('rw-new-post-btn').addEventListener('click', toggleComposer);
+      document.getElementById('rw-edit-profile-btn').addEventListener('click', toggleProfileForm);
       document.getElementById('rw-logout-btn').addEventListener('click', async () => {
         await authFetch(apiBase, '/api/users/logout', { method: 'POST' });
         currentUser = null;
@@ -168,6 +184,44 @@
     }
   }
 
+  function toggleProfileForm() {
+    const slot = document.getElementById('rw-profile-form-slot');
+    if (slot.dataset.open === '1') {
+      slot.innerHTML = '';
+      slot.removeAttribute('data-open');
+      return;
+    }
+    slot.dataset.open = '1';
+    slot.innerHTML = `
+      <form id="rw-profile-form" class="rw-blog-inline-form">
+        <label>Display name</label>
+        <input name="display_name" value="${escapeHtml(currentUser.display_name)}" required />
+        <label>Profile picture URL (optional)</label>
+        <input name="avatar_url" value="${escapeHtml(currentUser.avatar_url || '')}" placeholder="https://..." />
+        <div class="rw-error" id="rw-profile-error"></div>
+        <button type="submit">Save profile</button>
+      </form>
+    `;
+    const form = document.getElementById('rw-profile-form');
+    const errorEl = document.getElementById('rw-profile-error');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      try {
+        currentUser = await authFetch(apiBase, '/api/users/me', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            display_name: form.display_name.value.trim(),
+            avatar_url: form.avatar_url.value.trim(),
+          }),
+        });
+        render();
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
+  }
+
   function toggleComposer() {
     const slot = document.getElementById('rw-composer-slot');
     if (slot.dataset.open === '1') {
@@ -221,7 +275,10 @@
       content.innerHTML = posts.map((p) => `
         <div class="rw-blog-post-card">
           <a class="rw-blog-post-title" href="#post-${p.id}">${escapeHtml(p.title)}</a>
-          <div class="rw-blog-post-meta">${escapeHtml(p.author_name)} · ${fmtDate(p.created_at)} · ${p.comment_count} comment${p.comment_count === 1 ? '' : 's'}</div>
+          <div class="rw-blog-post-meta" style="display:flex; align-items:center; gap:0.4rem;">
+            ${avatarHtml(p.author_name, p.author_avatar, 20)}
+            ${escapeHtml(p.author_name)} · ${fmtDate(p.created_at)} · ${p.comment_count} comment${p.comment_count === 1 ? '' : 's'}
+          </div>
           <p class="rw-blog-post-excerpt">${escapeHtml(p.excerpt)}</p>
           <a class="rw-blog-readmore" href="#post-${p.id}">Read more →</a>
         </div>
@@ -250,7 +307,10 @@
     content.innerHTML = `
       <a href="#" class="rw-blog-back">← Back to all posts</a>
       <h3 class="rw-blog-post-title-full">${escapeHtml(post.title)}</h3>
-      <div class="rw-blog-post-meta">${escapeHtml(post.author_name)} · ${fmtDate(post.created_at)}</div>
+      <div class="rw-blog-post-meta" style="display:flex; align-items:center; gap:0.4rem;">
+        ${avatarHtml(post.author_name, post.author_avatar, 22)}
+        ${escapeHtml(post.author_name)} · ${fmtDate(post.created_at)}
+      </div>
       <div class="rw-blog-post-body">${escapeHtml(post.body)}</div>
       ${isOwner ? `<button class="rw-blog-link-btn rw-blog-danger" id="rw-delete-post">Delete this post</button>` : ''}
 
@@ -258,7 +318,10 @@
         <h4>Comments (${post.comments.length})</h4>
         ${post.comments.map((c) => `
           <div class="rw-blog-comment">
-            <div class="rw-blog-comment-meta"><strong>${escapeHtml(c.author_name)}</strong> · ${fmtDate(c.created_at)}</div>
+            <div class="rw-blog-comment-meta" style="display:flex; align-items:center; gap:0.4rem;">
+              ${avatarHtml(c.author_name, c.author_avatar, 18)}
+              <strong>${escapeHtml(c.author_name)}</strong> · ${fmtDate(c.created_at)}
+            </div>
             <div>${escapeHtml(c.body)}</div>
             ${currentUser && currentUser.id === c.user_id ? `<button class="rw-blog-link-btn rw-blog-danger" data-delete-comment="${c.id}">Delete</button>` : ''}
           </div>

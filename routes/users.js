@@ -22,7 +22,7 @@ const userCookieOptions = {
 };
 
 function publicUser(user) {
-  return { id: user.id, username: user.username, display_name: user.display_name };
+  return { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url || '' };
 }
 
 // --- Public: create an account ---
@@ -89,6 +89,31 @@ router.post('/logout', (req, res) => {
 
 router.get('/me', requireUser, (req, res) => {
   res.json(req.user);
+});
+
+// --- Edit your own profile (display name and/or profile picture URL) ---
+router.patch('/me', requireUser, (req, res) => {
+  const { display_name, avatar_url } = req.body || {};
+  const updates = {};
+
+  if (display_name !== undefined) {
+    if (!display_name.trim()) return res.status(400).json({ error: 'Display name cannot be empty.' });
+    updates.display_name = display_name.trim();
+  }
+  if (avatar_url !== undefined) {
+    updates.avatar_url = avatar_url.trim();
+  }
+
+  const setClause = Object.keys(updates)
+    .map((field) => `${field} = @${field}`)
+    .join(', ');
+
+  if (setClause) {
+    db.prepare(`UPDATE users SET ${setClause} WHERE id = @id`).run({ ...updates, id: req.user.id });
+  }
+
+  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  res.json(publicUser(updated));
 });
 
 // --- Admin: list all users (for moderation) ---

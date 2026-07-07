@@ -86,6 +86,7 @@ db.exec(`
     username TEXT UNIQUE NOT NULL,
     display_name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
+    avatar_url TEXT DEFAULT '',
     is_banned INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -132,6 +133,7 @@ function addColumnIfMissing(table, columnDef) {
 }
 
 addColumnIfMissing('announcements', "image_url TEXT DEFAULT ''");
+addColumnIfMissing('users', "avatar_url TEXT DEFAULT ''");
 
 // One-time fix for accounts created before usernames were normalized to
 // lowercase at signup/login — without this, an existing account's stored

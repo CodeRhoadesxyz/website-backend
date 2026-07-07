@@ -14,7 +14,7 @@ router.get('/', (req, res) => {
   const rows = db
     .prepare(
       `SELECT p.id, p.title, p.body, p.created_at, p.user_id,
-              u.display_name as author_name,
+              u.display_name as author_name, u.avatar_url as author_avatar,
               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
        FROM posts p JOIN users u ON u.id = p.user_id
        ORDER BY p.created_at DESC`
@@ -29,7 +29,7 @@ router.get('/', (req, res) => {
 router.get('/:id', (req, res) => {
   const post = db
     .prepare(
-      `SELECT p.*, u.display_name as author_name
+      `SELECT p.*, u.display_name as author_name, u.avatar_url as author_avatar
        FROM posts p JOIN users u ON u.id = p.user_id
        WHERE p.id = ?`
     )
@@ -39,7 +39,7 @@ router.get('/:id', (req, res) => {
 
   const comments = db
     .prepare(
-      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name as author_name
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name as author_name, u.avatar_url as author_avatar
        FROM comments c JOIN users u ON u.id = c.user_id
        WHERE c.post_id = ? ORDER BY c.created_at ASC`
     )
@@ -61,7 +61,7 @@ router.post('/', requireUser, (req, res) => {
 
   const created = db
     .prepare(
-      `SELECT p.*, u.display_name as author_name FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?`
+      `SELECT p.*, u.display_name as author_name, u.avatar_url as author_avatar FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?`
     )
     .get(result.lastInsertRowid);
   res.status(201).json({ ...created, comments: [] });
@@ -81,7 +81,7 @@ router.patch('/:id', requireUser, (req, res) => {
   ).run(title || null, body || null, req.params.id);
 
   const updated = db
-    .prepare(`SELECT p.*, u.display_name as author_name FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?`)
+    .prepare(`SELECT p.*, u.display_name as author_name, u.avatar_url as author_avatar FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?`)
     .get(req.params.id);
   res.json(updated);
 });
@@ -116,7 +116,7 @@ router.post('/:id/comments', requireUser, (req, res) => {
 
   const created = db
     .prepare(
-      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name as author_name
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name as author_name, u.avatar_url as author_avatar
        FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?`
     )
     .get(result.lastInsertRowid);
