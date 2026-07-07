@@ -19,6 +19,22 @@
 
   const STATUS_LABELS = { available: 'Available', pending: 'Pending', adopted: 'Adopted' };
 
+  // Builds a per-bird apply link that carries the bird's name through as a
+  // ?bird= parameter, so the adoption form on the other end can auto-fill its
+  // "which bird" field. Works whether applyUrl is a relative page
+  // ("adoption.html"), an absolute URL, or a same-page anchor
+  // ("#rescue-adoption-form") — URL() resolves all three against the current
+  // page and preserves any existing hash/query.
+  function buildApplyHref(birdName) {
+    try {
+      const url = new URL(applyUrl, window.location.href);
+      url.searchParams.set('bird', birdName);
+      return url.toString();
+    } catch (err) {
+      return applyUrl;
+    }
+  }
+
   async function load() {
     const container = document.getElementById(containerId);
     if (!container) {
@@ -49,7 +65,7 @@
                   </div>
                   <div class="rw-bird-meta">${escapeHtml(b.species)}${b.age ? ' · ' + escapeHtml(b.age) : ''}${b.sex ? ' · ' + escapeHtml(b.sex) : ''}</div>
                   ${b.description ? `<div class="rw-bird-desc">${escapeHtml(b.description)}</div>` : ''}
-                  <a class="rw-bird-apply-btn" href="${escapeHtml(applyUrl)}">Apply to Adopt →</a>
+                  <a class="rw-bird-apply-btn" href="${escapeHtml(buildApplyHref(b.name))}">Apply to Adopt →</a>
                 </div>
               </div>
             `).join('')}

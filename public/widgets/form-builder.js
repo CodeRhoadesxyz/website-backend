@@ -10,11 +10,12 @@
 
     const fieldHtml = fields.map((f) => {
       const req = f.required !== false;
+      const initialValue = f.value || '';
       if (f.type === 'textarea') {
         return `
           <div>
             <label for="${f.name}">${escapeHtml(f.label)}${req ? ' *' : ''}</label>
-            <textarea id="${f.name}" name="${f.name}" rows="${f.rows || 3}" ${req ? 'required' : ''}></textarea>
+            <textarea id="${f.name}" name="${f.name}" rows="${f.rows || 3}" ${req ? 'required' : ''}>${escapeHtml(initialValue)}</textarea>
           </div>`;
       }
       if (f.type === 'select') {
@@ -22,14 +23,14 @@
           <div>
             <label for="${f.name}">${escapeHtml(f.label)}${req ? ' *' : ''}</label>
             <select id="${f.name}" name="${f.name}" ${req ? 'required' : ''}>
-              ${f.options.map((opt) => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('')}
+              ${f.options.map((opt) => `<option value="${escapeHtml(opt)}" ${opt === initialValue ? 'selected' : ''}>${escapeHtml(opt)}</option>`).join('')}
             </select>
           </div>`;
       }
       return `
         <div>
           <label for="${f.name}">${escapeHtml(f.label)}${req ? ' *' : ''}</label>
-          <input id="${f.name}" name="${f.name}" type="${f.type || 'text'}" ${req ? 'required' : ''} />
+          <input id="${f.name}" name="${f.name}" type="${f.type || 'text'}" value="${escapeHtml(initialValue)}" ${req ? 'required' : ''} />
         </div>`;
     }).join('');
 

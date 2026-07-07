@@ -13,6 +13,11 @@
 
   const apiBase = window.RescueWidgets.getApiBase(scriptEl);
 
+  // If the person arrived here via a specific bird's "Apply to Adopt" button,
+  // the birds grid widget passes that bird's name through as ?bird=... —
+  // pre-fill the "which bird" field with it so they don't have to retype it.
+  const prefillBird = new URLSearchParams(window.location.search).get('bird') || '';
+
   window.RescueWidgets.renderForm(containerId, {
     type: 'adoption',
     apiBase,
@@ -24,7 +29,7 @@
       { name: 'email', label: 'Email', type: 'email', required: true },
       { name: 'phone', label: 'Phone', type: 'tel', required: true },
       { name: 'address', label: 'Home address', required: false },
-      { name: 'whichBird', label: 'Which bird are you interested in? (if any)', required: false },
+      { name: 'whichBird', label: 'Which bird are you interested in? (if any)', required: false, value: prefillBird },
       { name: 'homeType', label: 'Home type', type: 'select', options: ['House', 'Apartment/Condo', 'Other'], required: false },
       { name: 'birdExperience', label: 'Prior experience with parrots', type: 'textarea', required: true },
       { name: 'aboutHousehold', label: 'Tell us about your household (other pets, children, daily schedule)', type: 'textarea', required: true },
