@@ -223,6 +223,42 @@
 }
 .rw-bird-apply-btn:hover { background: var(--rw-canopy-dark); }
 
+/* --- In-page popup modal (used by the birds grid's Apply to Adopt button) --- */
+.rw-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 20, 18, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 5vh 1rem;
+  overflow-y: auto;
+  z-index: 9999;
+}
+.rw-modal {
+  background: #fff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 560px;
+  padding: 1.75rem;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+}
+.rw-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(0,0,0,0.06);
+  border: none;
+  border-radius: 999px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #444;
+}
+.rw-modal-close:hover { background: rgba(0,0,0,0.12); }
+
 /* --- Community blog --- */
 .rescue-widget.rw-blog-wrap { max-width: 720px; }
 
@@ -353,6 +389,10 @@
   .rescue-widget .rw-blog-readmore { color: #9fd1ac; }
   .rescue-widget .rw-blog-comments,
   .rescue-widget .rw-blog-comment { border-color: rgba(255,255,255,0.12); }
+
+  .rw-modal { background: #1c2420; }
+  .rw-modal-close { background: rgba(255,255,255,0.08); color: #ece7da; }
+  .rw-modal-close:hover { background: rgba(255,255,255,0.16); }
 
   .rw-announcement {
     background: rgba(255,255,255,0.07);

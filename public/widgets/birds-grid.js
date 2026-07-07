@@ -13,18 +13,16 @@
 
   const apiBase = window.RescueWidgets.getApiBase(scriptEl);
   const { escapeHtml, getJson } = window.RescueWidgets;
-  // Where the "Apply to Adopt" button on each card should link. Point this at
-  // your adoption application page via data-apply-url on the script tag.
-  const applyUrl = scriptEl.dataset.applyUrl || '#rescue-adoption-form';
+
+  // Optional: if you have a separate, dedicated adoption application page and
+  // want the button to link there instead of popping up in place, set
+  // data-apply-url on this script tag to that page's URL. Leave it unset
+  // (the default) for the button to open the adoption form as an in-page
+  // popup instead — no extra page needed.
+  const applyUrl = scriptEl.dataset.applyUrl || '';
 
   const STATUS_LABELS = { available: 'Available', pending: 'Pending', adopted: 'Adopted' };
 
-  // Builds a per-bird apply link that carries the bird's name through as a
-  // ?bird= parameter, so the adoption form on the other end can auto-fill its
-  // "which bird" field. Works whether applyUrl is a relative page
-  // ("adoption.html"), an absolute URL, or a same-page anchor
-  // ("#rescue-adoption-form") — URL() resolves all three against the current
-  // page and preserves any existing hash/query.
   function buildApplyHref(birdName) {
     try {
       const url = new URL(applyUrl, window.location.href);
@@ -65,16 +63,58 @@
                   </div>
                   <div class="rw-bird-meta">${escapeHtml(b.species)}${b.age ? ' · ' + escapeHtml(b.age) : ''}${b.sex ? ' · ' + escapeHtml(b.sex) : ''}</div>
                   ${b.description ? `<div class="rw-bird-desc">${escapeHtml(b.description)}</div>` : ''}
-                  <a class="rw-bird-apply-btn" href="${escapeHtml(buildApplyHref(b.name))}">Apply to Adopt →</a>
+                  ${applyUrl
+                    ? `<a class="rw-bird-apply-btn" href="${escapeHtml(buildApplyHref(b.name))}">Apply to Adopt →</a>`
+                    : `<button class="rw-bird-apply-btn" data-apply-bird="${escapeHtml(b.name)}">Apply to Adopt →</button>`}
                 </div>
               </div>
             `).join('')}
           </div>
         </div>
       `;
+
+      if (!applyUrl) {
+        container.querySelectorAll('[data-apply-bird]').forEach((btn) => {
+          btn.addEventListener('click', () => openApplyModal(btn.dataset.applyBird));
+        });
+      }
     } catch (err) {
       container.innerHTML = `<div class="rescue-widget"><p class="rw-error">Could not load adoptable birds right now.</p></div>`;
     }
+  }
+
+  function openApplyModal(birdName) {
+    if (!window.RescueWidgets.renderAdoptionForm) {
+      alert('The application form failed to load — form-builder.js and adoption-form.js must both be included on this page.');
+      console.error('Rescue widget: form-builder.js and adoption-form.js must be loaded before birds-grid.js for the popup application to work.');
+      return;
+    }
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'rw-modal-backdrop';
+    backdrop.innerHTML = `
+      <div class="rw-modal">
+        <button class="rw-modal-close" aria-label="Close">✕</button>
+        <div id="rw-apply-modal-slot"></div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+    document.body.style.overflow = 'hidden';
+
+    function close() {
+      backdrop.remove();
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onKeydown);
+    }
+    function onKeydown(e) {
+      if (e.key === 'Escape') close();
+    }
+
+    backdrop.querySelector('.rw-modal-close').addEventListener('click', close);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+    document.addEventListener('keydown', onKeydown);
+
+    window.RescueWidgets.renderAdoptionForm('rw-apply-modal-slot', { apiBase, prefillBird: birdName });
   }
 
   load();
