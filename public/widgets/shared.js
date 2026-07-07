@@ -35,5 +35,20 @@
     return data;
   }
 
-  window.RescueWidgets = { getApiBase, escapeHtml, postJson, getJson };
+  // Like postJson/getJson but sends cookies (credentials: 'include') and
+  // supports any method — needed for the blog's account system (signup,
+  // login, creating posts/comments, deleting your own posts/comments), all
+  // of which rely on the user_token cookie for identity.
+  async function authFetch(apiBase, path, options = {}) {
+    const res = await fetch(`${apiBase}${path}`, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+    return data;
+  }
+
+  window.RescueWidgets = { getApiBase, escapeHtml, postJson, getJson, authFetch };
 })();

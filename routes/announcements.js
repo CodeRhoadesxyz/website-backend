@@ -38,7 +38,7 @@ router.get('/', requireAdmin, (req, res) => {
 
 // --- Admin: create ---
 router.post('/', requireAdmin, (req, res) => {
-  const { title, message, link_url, link_text, is_published } = req.body || {};
+  const { title, message, link_url, link_text, image_url, is_published } = req.body || {};
 
   if (!title || !message) {
     return res.status(400).json({ error: 'Title and message are required.' });
@@ -46,10 +46,10 @@ router.post('/', requireAdmin, (req, res) => {
 
   const result = db
     .prepare(
-      `INSERT INTO announcements (title, message, link_url, link_text, is_published)
-       VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO announcements (title, message, link_url, link_text, image_url, is_published)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .run(title, message, link_url || '', link_text || '', is_published === false ? 0 : 1);
+    .run(title, message, link_url || '', link_text || '', image_url || '', is_published === false ? 0 : 1);
 
   const created = db.prepare('SELECT * FROM announcements WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(created);
@@ -60,7 +60,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
   const existing = db.prepare('SELECT * FROM announcements WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Announcement not found.' });
 
-  const fields = ['title', 'message', 'link_url', 'link_text', 'is_published'];
+  const fields = ['title', 'message', 'link_url', 'link_text', 'image_url', 'is_published'];
   const updates = {};
   for (const field of fields) {
     if (field in (req.body || {})) {

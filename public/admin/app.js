@@ -15,6 +15,7 @@ const TAB_TITLES = {
   events: 'Events',
   announcements: 'News announcements',
   birds: 'Adoptable birds',
+  community: 'Community',
 };
 
 let currentTab = 'adoption';
@@ -105,11 +106,13 @@ function switchTab(tab) {
   const eventsView = document.getElementById('events-view');
   const announcementsView = document.getElementById('announcements-view');
   const birdsView = document.getElementById('birds-view');
+  const communityView = document.getElementById('community-view');
 
   appView.style.display = 'none';
   eventsView.style.display = 'none';
   announcementsView.style.display = 'none';
   birdsView.style.display = 'none';
+  communityView.style.display = 'none';
 
   if (tab === 'events') {
     eventsView.style.display = 'block';
@@ -120,6 +123,9 @@ function switchTab(tab) {
   } else if (tab === 'birds') {
     birdsView.style.display = 'block';
     loadBirds();
+  } else if (tab === 'community') {
+    communityView.style.display = 'block';
+    loadCommunity();
   } else {
     appView.style.display = 'block';
     loadApplications(tab);
@@ -497,6 +503,8 @@ function openAnnouncementModal(announcement) {
         <input id="an-title" value="${escapeHtml(announcement?.title || '')}" placeholder="e.g. We're at capacity — foster homes needed" />
         <label>Message</label>
         <textarea id="an-message" rows="3" placeholder="Keep it short — this shows as a slim banner on the homepage.">${escapeHtml(announcement?.message || '')}</textarea>
+        <label>Image URL (optional)</label>
+        <input id="an-image" value="${escapeHtml(announcement?.image_url || '')}" placeholder="https://..." />
         <div class="field-grid">
           <div class="half"><label>Link URL (optional)</label><input id="an-link-url" value="${escapeHtml(announcement?.link_url || '')}" placeholder="https://..." /></div>
           <div class="half"><label>Link text (optional)</label><input id="an-link-text" value="${escapeHtml(announcement?.link_text || '')}" placeholder="e.g. Learn more" /></div>
@@ -524,6 +532,7 @@ function openAnnouncementModal(announcement) {
     const payload = {
       title: document.getElementById('an-title').value.trim(),
       message: document.getElementById('an-message').value.trim(),
+      image_url: document.getElementById('an-image').value.trim(),
       link_url: document.getElementById('an-link-url').value.trim(),
       link_text: document.getElementById('an-link-text').value.trim(),
       is_published: document.getElementById('an-published').value === '1',
@@ -706,6 +715,192 @@ function openBirdModal(bird) {
       }
     });
   }
+}
+
+// ---------- community moderation ----------
+
+async function loadCommunity() {
+  const view = document.getElementById('community-view');
+  view.innerHTML = `
+    <h3 style="margin-bottom:0.75rem;">Posts</h3>
+    <div id="community-posts-wrap">Loading…</div>
+    <h3 style="margin:2rem 0 0.75rem;">Accounts</h3>
+    <div id="community-users-wrap">Loading…</div>
+  `;
+
+  try {
+    const posts = await api('/api/posts');
+    renderCommunityPosts(posts);
+  } catch (e) {
+    document.getElementById('community-posts-wrap').innerHTML = `<div class="empty-state">Could not load posts.</div>`;
+  }
+
+  try {
+    const users = await api('/api/users');
+    renderCommunityUsers(users);
+  } catch (e) {
+    document.getElementById('community-users-wrap').innerHTML = `<div class="empty-state">Could not load accounts.</div>`;
+  }
+}
+
+function renderCommunityPosts(posts) {
+  const wrap = document.getElementById('community-posts-wrap');
+  if (posts.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No posts yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Posted</th><th>Title</th><th>Author</th><th>Comments</th><th></th></tr></thead>
+      <tbody>
+        ${posts.map((p) => `
+          <tr>
+            <td class="mono">${fmtDate(p.created_at)}</td>
+            <td>${escapeHtml(p.title)}</td>
+            <td>${escapeHtml(p.author_name)}</td>
+            <td>${p.comment_count}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn-secondary" data-view-post="${p.id}" style="margin-right:0.4rem;">View</button>
+              <button class="btn-danger" data-delete-post="${p.id}">Delete</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  wrap.querySelectorAll('[data-view-post]').forEach((btn) =>
+    btn.addEventListener('click', () => openPostModeration(btn.dataset.viewPost))
+  );
+  wrap.querySelectorAll('[data-delete-post]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this post and all its comments permanently?')) return;
+      try {
+        await api(`/api/posts/${btn.dataset.deletePost}`, { method: 'DELETE' });
+        toast('Post deleted.');
+        loadCommunity();
+      } catch (err) {
+        alert(`Could not delete: ${err.message}`);
+      }
+    })
+  );
+}
+
+async function openPostModeration(id) {
+  const post = await api(`/api/posts/${id}`);
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>${escapeHtml(post.title)}</h3>
+          <button class="btn-ghost" id="modal-close">✕</button>
+        </div>
+        <p class="mono" style="color:var(--muted); font-size:0.8rem;">By ${escapeHtml(post.author_name)} · ${fmtDate(post.created_at)}</p>
+        <div class="card" style="white-space:pre-wrap;">${escapeHtml(post.body)}</div>
+
+        <h4 style="margin-bottom:0.5rem;">Comments (${post.comments.length})</h4>
+        ${post.comments.length === 0 ? `<p style="color:var(--muted); font-size:0.9rem;">No comments.</p>` : post.comments.map((c) => `
+          <div class="card" style="padding:0.8rem 1rem; margin-bottom:0.6rem;">
+            <p class="mono" style="color:var(--muted); font-size:0.78rem; margin-bottom:0.3rem;">${escapeHtml(c.author_name)} · ${fmtDate(c.created_at)}</p>
+            <p style="margin-bottom:0.5rem;">${escapeHtml(c.body)}</p>
+            <button class="btn-danger" data-delete-comment="${c.id}" style="font-size:0.8rem; padding:0.35rem 0.8rem;">Delete comment</button>
+          </div>
+        `).join('')}
+
+        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
+          <button class="btn-danger" id="delete-post-modal">Delete entire post</button>
+          <button class="btn-secondary" id="modal-close-2">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const close = () => closeModal();
+  document.getElementById('modal-close').addEventListener('click', close);
+  document.getElementById('modal-close-2').addEventListener('click', close);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-backdrop') close();
+  });
+
+  document.getElementById('delete-post-modal').addEventListener('click', async () => {
+    if (!confirm('Delete this post and all its comments permanently?')) return;
+    try {
+      await api(`/api/posts/${id}`, { method: 'DELETE' });
+      toast('Post deleted.');
+      close();
+      loadCommunity();
+    } catch (err) {
+      alert(`Could not delete: ${err.message}`);
+    }
+  });
+
+  document.querySelectorAll('[data-delete-comment]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this comment permanently?')) return;
+      try {
+        await api(`/api/comments/${btn.dataset.deleteComment}`, { method: 'DELETE' });
+        toast('Comment deleted.');
+        openPostModeration(id);
+      } catch (err) {
+        alert(`Could not delete: ${err.message}`);
+      }
+    });
+  });
+}
+
+function renderCommunityUsers(users) {
+  const wrap = document.getElementById('community-users-wrap');
+  if (users.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No accounts yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Joined</th><th>Name</th><th>Username</th><th>Posts</th><th>Comments</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${users.map((u) => `
+          <tr>
+            <td class="mono">${fmtDate(u.created_at)}</td>
+            <td>${escapeHtml(u.display_name)}</td>
+            <td class="mono">${escapeHtml(u.username)}</td>
+            <td>${u.post_count}</td>
+            <td>${u.comment_count}</td>
+            <td><span class="pill ${u.is_banned ? 'pill-declined' : 'pill-approved'}">${u.is_banned ? 'Suspended' : 'Active'}</span></td>
+            <td style="white-space:nowrap;">
+              <button class="btn-secondary" data-toggle-ban="${u.id}" data-banned="${u.is_banned}" style="margin-right:0.4rem;">${u.is_banned ? 'Unsuspend' : 'Suspend'}</button>
+              <button class="btn-danger" data-delete-user="${u.id}">Delete</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  wrap.querySelectorAll('[data-toggle-ban]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const nowBanned = btn.dataset.banned !== 'true';
+      try {
+        await api(`/api/users/${btn.dataset.toggleBan}`, { method: 'PATCH', body: JSON.stringify({ is_banned: nowBanned }) });
+        toast(nowBanned ? 'Account suspended.' : 'Account unsuspended.');
+        loadCommunity();
+      } catch (err) {
+        alert(`Could not update account: ${err.message}`);
+      }
+    })
+  );
+
+  wrap.querySelectorAll('[data-delete-user]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this account and all their posts/comments permanently?')) return;
+      try {
+        await api(`/api/users/${btn.dataset.deleteUser}`, { method: 'DELETE' });
+        toast('Account deleted.');
+        loadCommunity();
+      } catch (err) {
+        alert(`Could not delete: ${err.message}`);
+      }
+    })
+  );
 }
 
 boot();

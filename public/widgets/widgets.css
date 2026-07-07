@@ -127,6 +127,13 @@
   background: var(--rw-coral, #d98872);
   flex-shrink: 0;
 }
+.rw-announcement .rw-a-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
 .rw-announcement .rw-a-title { font-weight: 700; }
 .rw-announcement .rw-a-message { color: inherit; opacity: 0.88; }
 .rw-announcement .rw-a-link {
@@ -216,6 +223,84 @@
 }
 .rw-bird-apply-btn:hover { background: var(--rw-canopy-dark); }
 
+/* --- Community blog --- */
+.rescue-widget.rw-blog-wrap { max-width: 720px; }
+
+.rw-blog-authbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--rw-line);
+  font-size: 0.9rem;
+}
+
+.rw-blog-link-btn {
+  background: none;
+  border: none;
+  color: var(--rw-canopy);
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  padding: 0.3rem 0.6rem;
+}
+.rw-blog-link-btn:hover { text-decoration: underline; }
+.rw-blog-danger { color: var(--rw-danger); }
+
+.rw-blog-inline-form {
+  background: rgba(79,115,88,0.05);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  margin-top: 0.75rem;
+}
+
+.rw-blog-post-card {
+  border-bottom: 1px solid var(--rw-line);
+  padding: 1.25rem 0;
+}
+.rw-blog-post-card:first-child { padding-top: 0; }
+
+.rw-blog-post-title {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 1.2rem;
+  color: var(--rw-canopy-dark);
+  text-decoration: none;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+.rw-blog-post-title:hover { text-decoration: underline; }
+
+.rw-blog-post-meta { color: #6b6b6b; font-size: 0.85rem; margin-bottom: 0.5rem; }
+.rw-blog-post-excerpt { font-size: 0.94rem; margin-bottom: 0.4rem; }
+.rw-blog-readmore { font-weight: 600; font-size: 0.88rem; color: var(--rw-canopy); text-decoration: none; }
+.rw-blog-readmore:hover { text-decoration: underline; }
+
+.rw-blog-back {
+  display: inline-block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--rw-canopy);
+  text-decoration: none;
+  margin-bottom: 1rem;
+}
+.rw-blog-back:hover { text-decoration: underline; }
+
+.rw-blog-post-title-full {
+  font-family: 'Fraunces', Georgia, serif;
+  color: var(--rw-canopy-dark);
+  margin: 0 0 0.2rem;
+}
+.rw-blog-post-body { white-space: pre-wrap; font-size: 0.97rem; line-height: 1.6; margin: 1rem 0; }
+
+.rw-blog-comments { margin-top: 2rem; border-top: 1px solid var(--rw-line); padding-top: 1.25rem; }
+.rw-blog-comments h4 { font-family: 'Fraunces', Georgia, serif; color: var(--rw-canopy-dark); margin: 0 0 0.75rem; }
+.rw-blog-comment { padding: 0.75rem 0; border-bottom: 1px solid var(--rw-line); font-size: 0.92rem; }
+.rw-blog-comment-meta { font-size: 0.82rem; color: #6b6b6b; margin-bottom: 0.25rem; }
+
 /* --- Dark mode --- */
 /* The colors above assume a light/cream background. On a dark background,
    the same values (dark green, dark gray) read as near-black and become
@@ -254,6 +339,20 @@
   .rescue-widget .rw-bird-name { color: #f2efe6; }
   .rescue-widget .rw-bird-meta { color: #c9c9c9; }
   .rescue-widget .rw-bird-desc { color: #ddd8ca; }
+
+  .rescue-widget .rw-blog-authbar { border-color: rgba(255,255,255,0.15); }
+  .rescue-widget .rw-blog-link-btn { color: #9fd1ac; }
+  .rescue-widget .rw-blog-inline-form { background: rgba(255,255,255,0.05); }
+  .rescue-widget .rw-blog-post-card { border-color: rgba(255,255,255,0.12); }
+  .rescue-widget .rw-blog-post-title,
+  .rescue-widget .rw-blog-post-title-full,
+  .rescue-widget .rw-blog-comments h4 { color: #f2efe6; }
+  .rescue-widget .rw-blog-post-meta,
+  .rescue-widget .rw-blog-comment-meta { color: #c9c9c9; }
+  .rescue-widget .rw-blog-back,
+  .rescue-widget .rw-blog-readmore { color: #9fd1ac; }
+  .rescue-widget .rw-blog-comments,
+  .rescue-widget .rw-blog-comment { border-color: rgba(255,255,255,0.12); }
 
   .rw-announcement {
     background: rgba(255,255,255,0.07);

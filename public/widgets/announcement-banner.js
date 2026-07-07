@@ -26,11 +26,15 @@
         ? `<a class="rw-a-link" href="${escapeHtml(announcement.link_url)}">${escapeHtml(announcement.link_text || 'Learn more')} →</a>`
         : '';
 
+      const leadingVisual = announcement.image_url
+        ? `<img class="rw-a-thumb" src="${escapeHtml(announcement.image_url)}" alt="" />`
+        : `<span class="rw-a-dot"></span>`;
+
       container.style.display = '';
       container.innerHTML = `
         <div class="rescue-widget rw-announcement-wrap">
           <div class="rw-announcement">
-            <span class="rw-a-dot"></span>
+            ${leadingVisual}
             <span class="rw-a-title">${escapeHtml(announcement.title)}</span>
             <span class="rw-a-message">— ${escapeHtml(announcement.message)}</span>
             ${link}
