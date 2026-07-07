@@ -12,6 +12,7 @@ const birdRoutes = require('./routes/birds');
 const userRoutes = require('./routes/users');
 const postRoutes = require('./routes/posts');
 const commentRoutes = require('./routes/comments');
+const statsRoutes = require('./routes/stats');
 
 const app = express();
 
@@ -64,6 +65,7 @@ app.use('/api/birds', birdRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/comments', commentRoutes);
+app.use('/api/stats', statsRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 

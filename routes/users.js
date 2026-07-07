@@ -27,12 +27,17 @@ function publicUser(user) {
 
 // --- Public: create an account ---
 router.post('/signup', (req, res) => {
-  const { username, password, display_name } = req.body || {};
+  const { password, display_name } = req.body || {};
+  // Usernames are normalized to lowercase so login can never fail just
+  // because of a casing mismatch (e.g. signing up as "Dalton" but typing
+  // "dalton" later) — the display_name (shown on posts/comments) keeps
+  // whatever capitalization the person actually typed.
+  const username = (req.body && req.body.username || '').toLowerCase();
 
   if (!username || !password || !display_name) {
     return res.status(400).json({ error: 'Username, password, and display name are required.' });
   }
-  if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
+  if (!/^[a-z0-9_.-]{3,30}$/.test(username)) {
     return res.status(400).json({ error: 'Username must be 3-30 characters (letters, numbers, _ . -).' });
   }
   if (password.length < 8) {
@@ -57,7 +62,8 @@ router.post('/signup', (req, res) => {
 
 // --- Public: log in ---
 router.post('/login', (req, res) => {
-  const { username, password } = req.body || {};
+  const { password } = req.body || {};
+  const username = (req.body && req.body.username || '').toLowerCase();
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required.' });

@@ -133,4 +133,16 @@ function addColumnIfMissing(table, columnDef) {
 
 addColumnIfMissing('announcements', "image_url TEXT DEFAULT ''");
 
+// One-time fix for accounts created before usernames were normalized to
+// lowercase at signup/login — without this, an existing account's stored
+// casing would never match a lowercased login attempt.
+try {
+  db.exec(`UPDATE users SET username = LOWER(username) WHERE username != LOWER(username)`);
+} catch (err) {
+  // Only possible if two existing accounts differ solely by case (e.g. both
+  // "Dalton" and "dalton" already exist) — extremely unlikely, but don't
+  // crash startup over it if it happens.
+  console.error('Username lowercase migration skipped:', err.message);
+}
+
 module.exports = db;
