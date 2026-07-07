@@ -1,0 +1,94 @@
+.rescue-widget {
+  /* Matched to the live site: sage forest green + dusty coral + warm cream, pill buttons */
+  --rw-canopy: #4f7358;
+  --rw-canopy-dark: #1f3a2c;
+  --rw-coral: #d98872;
+  --rw-danger: #c1554a;
+  --rw-line: #dde3d6;
+  font-family: inherit;
+  max-width: 560px;
+}
+
+.rescue-widget * { box-sizing: border-box; }
+
+.rescue-widget h3 {
+  font-family: 'Fraunces', Georgia, serif;
+  color: var(--rw-canopy-dark);
+}
+
+.rescue-widget label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin: 0.9rem 0 0.3rem;
+}
+
+.rescue-widget input,
+.rescue-widget textarea,
+.rescue-widget select {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--rw-line);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.rescue-widget input:focus,
+.rescue-widget textarea:focus,
+.rescue-widget select:focus {
+  outline: 2px solid var(--rw-canopy);
+  outline-offset: 1px;
+}
+
+.rescue-widget button[type="submit"] {
+  margin-top: 1.1rem;
+  background: var(--rw-canopy);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.65rem 1.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.rescue-widget button[type="submit"]:hover { background: var(--rw-canopy-dark); }
+.rescue-widget button[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+.rescue-widget .rw-error { color: var(--rw-danger); font-size: 0.85rem; margin-top: 0.6rem; }
+.rescue-widget .rw-success {
+  background: rgba(31,58,44,0.06);
+  border: 1px solid rgba(79,115,88,0.35);
+  color: var(--rw-canopy-dark);
+  padding: 0.9rem 1.1rem;
+  border-radius: 18px;
+  font-size: 0.95rem;
+}
+
+.rescue-widget .rw-event-card {
+  border: 1px solid var(--rw-line);
+  border-radius: 20px;
+  padding: 1.1rem 1.3rem;
+  margin-bottom: 0.9rem;
+}
+.rescue-widget .rw-event-title {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--rw-canopy-dark);
+  margin-bottom: 0.2rem;
+}
+.rescue-widget .rw-event-meta { color: #6b6b6b; font-size: 0.85rem; margin-bottom: 0.5rem; }
+.rescue-widget .rw-event-desc { font-size: 0.92rem; margin-bottom: 0.7rem; }
+.rescue-widget .rw-rsvp-btn {
+  background: #fff;
+  color: var(--rw-canopy);
+  border: 1px solid var(--rw-canopy);
+  border-radius: 999px;
+  padding: 0.45rem 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.rescue-widget .rw-rsvp-btn:hover { background: rgba(79,115,88,0.08); }
