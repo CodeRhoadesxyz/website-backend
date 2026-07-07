@@ -14,6 +14,7 @@ const TAB_TITLES = {
   volunteer: 'Volunteer applications',
   events: 'Events',
   announcements: 'News announcements',
+  birds: 'Adoptable birds',
 };
 
 let currentTab = 'adoption';
@@ -103,10 +104,12 @@ function switchTab(tab) {
   const appView = document.getElementById('app-view');
   const eventsView = document.getElementById('events-view');
   const announcementsView = document.getElementById('announcements-view');
+  const birdsView = document.getElementById('birds-view');
 
   appView.style.display = 'none';
   eventsView.style.display = 'none';
   announcementsView.style.display = 'none';
+  birdsView.style.display = 'none';
 
   if (tab === 'events') {
     eventsView.style.display = 'block';
@@ -114,6 +117,9 @@ function switchTab(tab) {
   } else if (tab === 'announcements') {
     announcementsView.style.display = 'block';
     loadAnnouncements();
+  } else if (tab === 'birds') {
+    birdsView.style.display = 'block';
+    loadBirds();
   } else {
     appView.style.display = 'block';
     loadApplications(tab);
@@ -551,6 +557,150 @@ function openAnnouncementModal(announcement) {
         toast('Announcement deleted.');
         closeModal();
         loadAnnouncements();
+      } catch (err) {
+        alert(`Could not delete: ${err.message}`);
+      }
+    });
+  }
+}
+
+// ---------- adoptable birds ----------
+
+const BIRD_STATUS_LABELS = { available: 'Available', pending: 'Pending', adopted: 'Adopted' };
+
+async function loadBirds() {
+  const view = document.getElementById('birds-view');
+  view.innerHTML = `
+    <div style="margin-bottom:1rem;">
+      <button class="btn-primary" id="new-bird-btn">+ Add bird</button>
+    </div>
+    <div id="birds-table-wrap">Loading…</div>
+  `;
+  document.getElementById('new-bird-btn').addEventListener('click', () => openBirdModal());
+
+  try {
+    const birds = await api('/api/birds?all=1');
+    renderBirdsTable(birds);
+  } catch (e) {
+    document.getElementById('birds-table-wrap').innerHTML = `<div class="empty-state">Could not load birds.</div>`;
+  }
+}
+
+function renderBirdsTable(birds) {
+  const wrap = document.getElementById('birds-table-wrap');
+  if (birds.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No birds listed yet. Add your first one above.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th></th><th>Name</th><th>Species</th><th>Status</th><th>Visible</th><th></th></tr></thead>
+      <tbody>
+        ${birds.map((b) => `
+          <tr>
+            <td>${b.photo_url
+              ? `<img src="${escapeHtml(b.photo_url)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:8px;" />`
+              : `<div style="width:40px;height:40px;border-radius:8px;background:rgba(255,255,255,0.06);"></div>`}</td>
+            <td class="mono">${escapeHtml(b.name)}</td>
+            <td>${escapeHtml(b.species)}</td>
+            <td><span class="pill ${b.status === 'available' ? 'pill-approved' : b.status === 'pending' ? 'pill-new' : 'pill-archived'}">${BIRD_STATUS_LABELS[b.status]}</span></td>
+            <td><span class="pill ${b.is_published ? 'pill-approved' : 'pill-archived'}">${b.is_published ? 'Published' : 'Draft'}</span></td>
+            <td><button class="btn-secondary" data-edit="${b.id}">Edit</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  wrap.querySelectorAll('[data-edit]').forEach((btn) =>
+    btn.addEventListener('click', () => openBirdModal(birds.find((b) => b.id == btn.dataset.edit)))
+  );
+}
+
+function openBirdModal(bird) {
+  const isEdit = Boolean(bird);
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>${isEdit ? 'Edit bird' : 'New bird'}</h3>
+          <button class="btn-ghost" id="modal-close">✕</button>
+        </div>
+        <div class="field-grid">
+          <div class="half"><label>Name</label><input id="b-name" value="${escapeHtml(bird?.name || '')}" /></div>
+          <div class="half"><label>Species</label><input id="b-species" value="${escapeHtml(bird?.species || '')}" /></div>
+          <div class="half"><label>Age (optional)</label><input id="b-age" value="${escapeHtml(bird?.age || '')}" placeholder="e.g. 2 years" /></div>
+          <div class="half"><label>Sex (optional)</label><input id="b-sex" value="${escapeHtml(bird?.sex || '')}" placeholder="e.g. Male" /></div>
+          <div><label>Description</label><textarea id="b-desc" rows="4">${escapeHtml(bird?.description || '')}</textarea></div>
+          <div><label>Photo URL (optional)</label><input id="b-photo" value="${escapeHtml(bird?.photo_url || '')}" placeholder="https://..." /></div>
+          <div class="half"><label>Status</label>
+            <select id="b-status">
+              <option value="available" ${(!bird || bird.status === 'available') ? 'selected' : ''}>Available</option>
+              <option value="pending" ${bird?.status === 'pending' ? 'selected' : ''}>Pending</option>
+              <option value="adopted" ${bird?.status === 'adopted' ? 'selected' : ''}>Adopted</option>
+            </select>
+          </div>
+          <div class="half"><label>Visibility</label>
+            <select id="b-published">
+              <option value="1" ${bird?.is_published !== 0 ? 'selected' : ''}>Published</option>
+              <option value="0" ${bird?.is_published === 0 ? 'selected' : ''}>Draft</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
+          ${isEdit ? `<button class="btn-danger" id="delete-bird">Delete</button>` : `<span></span>`}
+          <button class="btn-primary" id="save-bird">${isEdit ? 'Save changes' : 'Add bird'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-backdrop') closeModal();
+  });
+
+  document.getElementById('save-bird').addEventListener('click', async () => {
+    const payload = {
+      name: document.getElementById('b-name').value.trim(),
+      species: document.getElementById('b-species').value.trim(),
+      age: document.getElementById('b-age').value.trim(),
+      sex: document.getElementById('b-sex').value.trim(),
+      description: document.getElementById('b-desc').value.trim(),
+      photo_url: document.getElementById('b-photo').value.trim(),
+      status: document.getElementById('b-status').value,
+      is_published: document.getElementById('b-published').value === '1',
+    };
+
+    if (!payload.name || !payload.species) {
+      alert('Name and species are required.');
+      return;
+    }
+
+    try {
+      if (isEdit) {
+        await api(`/api/birds/${bird.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        toast('Bird updated.');
+      } else {
+        await api('/api/birds', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Bird added.');
+      }
+      closeModal();
+      loadBirds();
+    } catch (err) {
+      alert(`Could not save changes: ${err.message}`);
+    }
+  });
+
+  if (isEdit) {
+    document.getElementById('delete-bird').addEventListener('click', async () => {
+      if (!confirm(`Remove ${bird.name} from the site permanently?`)) return;
+      try {
+        await api(`/api/birds/${bird.id}`, { method: 'DELETE' });
+        toast('Bird deleted.');
+        closeModal();
+        loadBirds();
       } catch (err) {
         alert(`Could not delete: ${err.message}`);
       }

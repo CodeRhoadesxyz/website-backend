@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const applicationRoutes = require('./routes/applications');
 const eventRoutes = require('./routes/events');
 const announcementRoutes = require('./routes/announcements');
+const birdRoutes = require('./routes/birds');
 
 const app = express();
 
@@ -56,6 +57,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/birds', birdRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 

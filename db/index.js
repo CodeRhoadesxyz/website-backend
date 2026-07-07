@@ -66,11 +66,26 @@ db.exec(`
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS birds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    species TEXT NOT NULL,
+    age TEXT DEFAULT '',
+    sex TEXT DEFAULT '',
+    description TEXT DEFAULT '',
+    photo_url TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'pending', 'adopted')),
+    is_published INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_applications_type ON applications(type);
   CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
   CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_time);
   CREATE INDEX IF NOT EXISTS idx_rsvps_event ON rsvps(event_id);
   CREATE INDEX IF NOT EXISTS idx_announcements_published ON announcements(is_published, created_at);
+  CREATE INDEX IF NOT EXISTS idx_birds_status ON birds(status, is_published);
 `);
 
 module.exports = db;

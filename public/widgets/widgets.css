@@ -144,6 +144,78 @@
   .rw-announcement .rw-a-link { margin-left: 0; }
 }
 
+/* --- Adoptable birds grid --- */
+.rescue-widget.rw-birds-wrap { max-width: none; width: 100%; margin: 0; }
+
+.rw-birds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.rw-bird-card {
+  border: 1px solid var(--rw-line);
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.rw-bird-photo {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  display: block;
+}
+.rw-bird-photo-placeholder {
+  background: rgba(79,115,88,0.08);
+}
+
+.rw-bird-body { padding: 1rem 1.1rem 1.2rem; display: flex; flex-direction: column; flex: 1; }
+
+.rw-bird-name-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.15rem; }
+.rw-bird-name {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--rw-canopy-dark);
+}
+.rw-bird-status {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+.rw-bird-status-pending { background: rgba(217,136,114,0.18); color: #a15239; }
+.rw-bird-status-adopted { background: rgba(124,143,134,0.18); color: #5c6b64; }
+
+.rw-bird-meta { color: #6b6b6b; font-size: 0.85rem; margin-bottom: 0.5rem; }
+.rw-bird-desc {
+  font-size: 0.9rem;
+  margin-bottom: 0.9rem;
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rw-bird-apply-btn {
+  display: inline-block;
+  text-align: center;
+  background: var(--rw-canopy);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-decoration: none;
+  margin-top: auto;
+}
+.rw-bird-apply-btn:hover { background: var(--rw-canopy-dark); }
+
 /* --- Dark mode --- */
 /* The colors above assume a light/cream background. On a dark background,
    the same values (dark green, dark gray) read as near-black and become
@@ -176,6 +248,12 @@
     border-color: rgba(255,255,255,0.4);
   }
   .rescue-widget .rw-rsvp-btn:hover { background: rgba(255,255,255,0.08); }
+
+  .rescue-widget .rw-bird-card { border-color: rgba(255,255,255,0.18); }
+  .rescue-widget .rw-bird-photo-placeholder { background: rgba(255,255,255,0.06); }
+  .rescue-widget .rw-bird-name { color: #f2efe6; }
+  .rescue-widget .rw-bird-meta { color: #c9c9c9; }
+  .rescue-widget .rw-bird-desc { color: #ddd8ca; }
 
   .rw-announcement {
     background: rgba(255,255,255,0.07);
