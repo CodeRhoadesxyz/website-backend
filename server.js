@@ -10,6 +10,12 @@ const eventRoutes = require('./routes/events');
 
 const app = express();
 
+// Railway/Render/Heroku-style platforms sit behind a reverse proxy that
+// terminates HTTPS, so without this Express thinks every request is plain
+// http — which breaks the same-origin check below (https://yourapp vs
+// http://yourapp never match).
+app.set('trust proxy', 1);
+
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim())
@@ -17,16 +23,30 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
 
 app.use(
   cors({
-    origin(origin, callback) {
-      // Allow same-origin/non-browser requests (no Origin header) and anything in the allowlist.
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error('Not allowed by CORS'));
+    origin(origin, callback, req) {
+      return callback(null, true);
     },
     credentials: true,
   })
 );
+
+// Custom origin check (placed after cors() so it can inspect the request):
+// the admin portal and widgets both call this same backend, so same-origin
+// requests are always allowed regardless of ALLOWED_ORIGINS. Cross-origin
+// requests (e.g. your main site embedding the widgets) must be in the list.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (!origin) return next(); // non-browser requests (curl, server-to-server) have no Origin header
+
+  const requestHost = `${req.protocol}://${req.get('host')}`;
+  const isSameOrigin = origin === requestHost;
+  const isAllowlisted = allowedOrigins.includes(origin);
+
+  if (isSameOrigin || isAllowlisted) return next();
+
+  return res.status(403).json({ error: 'This origin is not allowed to access the API.' });
+});
 
 app.use(express.json());
 app.use(cookieParser());
@@ -44,9 +64,6 @@ app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
 app.use('/widgets', express.static(path.join(__dirname, 'public/widgets')));
 
 app.use((err, req, res, next) => {
-  if (err.message === 'Not allowed by CORS') {
-    return res.status(403).json({ error: 'This origin is not allowed to access the API.' });
-  }
   console.error(err);
   res.status(500).json({ error: 'Something went wrong on our end.' });
 });
