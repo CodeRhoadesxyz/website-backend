@@ -105,7 +105,14 @@ router.patch('/:id', requireAdmin, (req, res) => {
   const fields = ['title', 'description', 'location', 'start_time', 'end_time', 'image_url', 'capacity', 'is_published'];
   const updates = {};
   for (const field of fields) {
-    if (field in (req.body || {})) updates[field] = req.body[field];
+    if (field in (req.body || {})) {
+      let value = req.body[field];
+      // better-sqlite3 only accepts numbers, strings, bigints, buffers, and
+      // null as bound parameters — a raw JS boolean throws, so is_published
+      // has to be converted to 0/1 here (the create route already does this).
+      if (field === 'is_published') value = value ? 1 : 0;
+      updates[field] = value;
+    }
   }
 
   const setClause = Object.keys(updates)
