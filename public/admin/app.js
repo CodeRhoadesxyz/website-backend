@@ -48,9 +48,15 @@ function closeModal() {
   document.getElementById('modal-root').innerHTML = '';
 }
 
-function fmtDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso.includes('T') || iso.includes(' ') ? iso.replace(' ', 'T') + 'Z' : iso);
+function fmtDate(input) {
+  if (!input) return '—';
+  // SQLite's created_at/updated_at look like "2026-07-19 11:00:00" and are true UTC —
+  // those need a Z so the browser converts to local time. Event start_time/end_time
+  // come from a <input type="datetime-local"> as "2026-07-19T11:00" and are ALREADY
+  // local wall-clock time, so they must be parsed as-is (no Z), or the displayed time
+  // shifts by your timezone offset.
+  const isSqliteUtcTimestamp = input.includes(' ') && !input.includes('T');
+  const d = new Date(isSqliteUtcTimestamp ? input.replace(' ', 'T') + 'Z' : input);
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
