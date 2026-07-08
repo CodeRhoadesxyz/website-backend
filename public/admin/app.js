@@ -243,7 +243,7 @@ function renderApplicationsTable(apps) {
   wrap.innerHTML = `
     <table>
       <thead>
-        <tr><th>Submitted</th><th>Name</th><th>Email</th><th>Status</th></tr>
+        <tr><th>Submitted</th><th>Name</th><th>Email</th><th>Status</th><th>Claimed</th></tr>
       </thead>
       <tbody>
         ${apps.map((app) => `
@@ -252,6 +252,11 @@ function renderApplicationsTable(apps) {
             <td>${escapeHtml(app.data.fullName || '—')}</td>
             <td>${escapeHtml(app.data.email || '—')}</td>
             <td><span class="pill pill-${app.status}">${STATUS_LABELS[app.status]}</span></td>
+            <td>
+              ${app.claimed_by
+                ? `<span class="pill ${app.claimed_by === currentAdminId ? 'pill-approved' : 'pill-in_review'}">${app.claimed_by === currentAdminId ? 'You' : escapeHtml(app.claimed_by_username || 'Claimed')}</span>`
+                : `<button class="btn-secondary" data-quick-claim="${app.id}" style="font-size:0.78rem; padding:0.3rem 0.65rem;">Claim</button>`}
+            </td>
           </tr>
         `).join('')}
       </tbody>
@@ -261,6 +266,20 @@ function renderApplicationsTable(apps) {
   wrap.querySelectorAll('tr[data-id]').forEach((row) => {
     row.addEventListener('click', () => openApplicationModal(row.dataset.id));
   });
+
+  wrap.querySelectorAll('[data-quick-claim]').forEach((btn) =>
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api(`/api/applications/${btn.dataset.quickClaim}/claim`, { method: 'POST' });
+        toast('Application claimed.');
+        loadApplications(currentTab);
+      } catch (err) {
+        alert(err.message);
+        loadApplications(currentTab);
+      }
+    })
+  );
 }
 
 async function openApplicationModal(id) {
@@ -277,6 +296,18 @@ async function openApplicationModal(id) {
           <button class="btn-ghost" id="modal-close">✕</button>
         </div>
         <p class="mono" style="color:var(--muted); font-size:0.8rem;">Submitted ${fmtDate(app.created_at)}</p>
+
+        <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:0.85rem 1rem;">
+          <span style="font-size:0.9rem;">
+            ${app.claimed_by
+              ? `<strong>${app.claimed_by === currentAdminId ? 'Claimed by you' : `Claimed by ${escapeHtml(app.claimed_by_username || 'another admin')}`}</strong>${app.claimed_at ? ` <span class="mono" style="color:var(--muted); font-size:0.78rem;">since ${fmtDate(app.claimed_at)}</span>` : ''}`
+              : `<span style="color:var(--muted);">Not claimed — anyone could reach out to this applicant.</span>`}
+          </span>
+          ${app.claimed_by
+            ? `<button class="btn-secondary" id="unclaim-btn" style="font-size:0.82rem;">Unclaim</button>`
+            : `<button class="btn-primary" id="claim-btn" style="font-size:0.82rem;">Claim</button>`}
+        </div>
+
         <div class="card">${fields}</div>
 
         <label for="status-select">Status</label>
@@ -305,6 +336,29 @@ async function openApplicationModal(id) {
   document.getElementById('modal-backdrop').addEventListener('click', (e) => {
     if (e.target.id === 'modal-backdrop') closeModal();
   });
+
+  if (app.claimed_by) {
+    document.getElementById('unclaim-btn').addEventListener('click', async () => {
+      try {
+        await api(`/api/applications/${id}/unclaim`, { method: 'POST' });
+        toast('Claim released.');
+        openApplicationModal(id);
+      } catch (err) {
+        alert(`Could not unclaim: ${err.message}`);
+      }
+    });
+  } else {
+    document.getElementById('claim-btn').addEventListener('click', async () => {
+      try {
+        await api(`/api/applications/${id}/claim`, { method: 'POST' });
+        toast('Application claimed.');
+        openApplicationModal(id);
+      } catch (err) {
+        alert(err.message);
+        openApplicationModal(id);
+      }
+    });
+  }
 
   if (app.type === 'volunteer') {
     document.getElementById('add-as-volunteer-btn').addEventListener('click', async () => {
