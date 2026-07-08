@@ -1404,7 +1404,7 @@ function renderDonationsTable(donations) {
 
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Date</th><th>Donor</th><th>Amount</th><th>Method</th><th>Campaign</th><th></th></tr></thead>
+      <thead><tr><th>Date</th><th>Donor</th><th>Amount</th><th>Method</th><th>Campaign</th><th>Public</th><th></th></tr></thead>
       <tbody>
         ${donations.map((d) => `
           <tr>
@@ -1413,6 +1413,7 @@ function renderDonationsTable(donations) {
             <td class="mono">$${d.amount.toFixed(2)}</td>
             <td>${DONATION_METHOD_LABELS[d.method] || d.method}</td>
             <td>${escapeHtml(d.campaign || '—')}</td>
+            <td>${d.display_publicly ? '<span class="pill pill-approved">Public</span>' : '<span class="mono" style="color:var(--muted); font-size:0.78rem;">Private</span>'}</td>
             <td style="white-space:nowrap;">
               <button class="btn-secondary" data-edit-donation="${d.id}" style="margin-right:0.4rem;">Edit</button>
               <button class="btn-danger" data-delete-donation="${d.id}">Delete</button>
@@ -1463,6 +1464,10 @@ function openDonationModal(donation) {
           </div>
           <div class="half"><label>Campaign (optional)</label><input id="d-campaign" value="${escapeHtml(donation?.campaign || '')}" placeholder="e.g. Spring appeal" /></div>
           <div><label><input type="checkbox" id="d-recurring" style="width:auto; display:inline-block; margin-right:0.4rem;" ${donation?.is_recurring ? 'checked' : ''}/> Recurring donor</label></div>
+          <div>
+            <label><input type="checkbox" id="d-public" style="width:auto; display:inline-block; margin-right:0.4rem;" ${donation?.display_publicly ? 'checked' : ''}/> Display publicly on website</label>
+            <div class="mono" style="color:var(--muted); font-size:0.78rem; margin-top:-0.35rem;">Only checked donors can ever appear on the public "top donors" widget — off by default. Get the donor's OK before checking this.</div>
+          </div>
           <div><label>Notes (optional)</label><textarea id="d-notes" rows="2">${escapeHtml(donation?.notes || '')}</textarea></div>
         </div>
         <div class="error-text" id="donation-error"></div>
@@ -1490,6 +1495,7 @@ function openDonationModal(donation) {
       method: document.getElementById('d-method').value,
       campaign: document.getElementById('d-campaign').value.trim(),
       is_recurring: document.getElementById('d-recurring').checked,
+      display_publicly: document.getElementById('d-public').checked,
       notes: document.getElementById('d-notes').value.trim(),
     };
 

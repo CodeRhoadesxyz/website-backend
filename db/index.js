@@ -122,6 +122,12 @@ db.exec(`
     campaign TEXT DEFAULT '',
     is_recurring INTEGER NOT NULL DEFAULT 0,
     notes TEXT DEFAULT '',
+    -- Opt-in only: whether this donor agreed to be named on the public
+    -- "top donors" widget. Defaults off, since most rows here are logged
+    -- from checks/cash with no expectation of public recognition -- this
+    -- table is bookkeeping, not a public donation form. Never show a donor
+    -- publicly without this explicitly being set to 1.
+    display_publicly INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -254,6 +260,10 @@ addColumnIfMissing('admins', "email TEXT DEFAULT ''");
 // resolved to a username via a join in the route.
 addColumnIfMissing('applications', 'claimed_by INTEGER');
 addColumnIfMissing('applications', 'claimed_at TEXT');
+// Opt-in flag for the public "top donors" widget — see the CREATE TABLE
+// comment above. Kept as a migration too so this lands on existing
+// databases, not just freshly-created ones.
+addColumnIfMissing('donations', 'display_publicly INTEGER NOT NULL DEFAULT 0');
 
 try {
   db.exec(`UPDATE users SET username = LOWER(username) WHERE username != LOWER(username)`);

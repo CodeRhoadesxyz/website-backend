@@ -6,9 +6,63 @@ const router = express.Router();
 
 const VALID_METHODS = ['cash', 'check', 'online', 'in_kind', 'other'];
 
-// All donation routes are admin-only — this is internal bookkeeping, not a
-// public donation form (there's no online payment processing here, just a
-// log of gifts that came in by check, cash, or an outside platform).
+// Public: this week's top donors, for the homepage/site-wide widget.
+// Deliberately placed BEFORE requireAdmin below, and deliberately narrow --
+// it only ever returns donors who were explicitly opted in via
+// display_publicly (set from the admin donation form). Everything else in
+// this file stays admin-only: this is internal bookkeeping, not a public
+// donation form, and most rows here are logged from checks/cash with no
+// expectation that a name will show up on the website.
+//
+// "This week" = the current Monday-Sunday week (server local time), so the
+// widget naturally rotates to a new set of donors every Monday without any
+// separate job or stored state -- it's just a live query over a moving
+// date window.
+router.get('/public-leaderboard', (req, res) => {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday .. 6 = Saturday
+  const diffToMonday = (day + 6) % 7; // days since most recent Monday
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - diffToMonday);
+  const weekStart = monday.toISOString().slice(0, 10);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const weekEnd = sunday.toISOString().slice(0, 10);
+
+  const rows = db
+    .prepare(
+      `SELECT donor_name, donor_email, amount, donation_date
+       FROM donations
+       WHERE display_publicly = 1 AND donation_date >= ? AND donation_date <= ?`
+    )
+    .all(weekStart, weekEnd);
+
+  const donorTotals = {};
+  for (const r of rows) {
+    const key = r.donor_email ? r.donor_email.toLowerCase() : r.donor_name;
+    if (!donorTotals[key]) donorTotals[key] = { donor_name: r.donor_name, total: 0 };
+    donorTotals[key].total += r.amount;
+  }
+
+  const topDonors = Object.values(donorTotals)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10)
+    // Amount is intentionally left off the public payload -- opting in to
+    // be named isn't the same as opting in to having the exact gift amount
+    // published. Name recognition only.
+    .map((d) => ({ donor_name: d.donor_name }));
+
+  res.json({
+    week_start: weekStart,
+    week_end: weekEnd,
+    top_donors: topDonors,
+  });
+});
+
+// All other donation routes are admin-only -- this is internal bookkeeping,
+// not a public donation form (there's no online payment processing here,
+// just a log of gifts that came in by check, cash, or an outside platform).
 router.use(requireAdmin);
 
 function applyFilters(query, params, req) {
@@ -142,7 +196,7 @@ router.get('/:id', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { donor_name, donor_email, amount, donation_date, method, campaign, is_recurring, notes } = req.body || {};
+  const { donor_name, donor_email, amount, donation_date, method, campaign, is_recurring, notes, display_publicly } = req.body || {};
 
   if (!donor_name || !String(donor_name).trim()) {
     return res.status(400).json({ error: 'Donor name is required.' });
@@ -160,8 +214,8 @@ router.post('/', (req, res) => {
 
   const result = db
     .prepare(
-      `INSERT INTO donations (donor_name, donor_email, amount, donation_date, method, campaign, is_recurring, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO donations (donor_name, donor_email, amount, donation_date, method, campaign, is_recurring, notes, display_publicly)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       donor_name.trim(),
@@ -171,7 +225,8 @@ router.post('/', (req, res) => {
       method || 'other',
       campaign || '',
       is_recurring ? 1 : 0,
-      notes || ''
+      notes || '',
+      display_publicly ? 1 : 0
     );
 
   const created = db.prepare('SELECT * FROM donations WHERE id = ?').get(result.lastInsertRowid);
@@ -192,12 +247,12 @@ router.patch('/:id', (req, res) => {
     }
   }
 
-  const fields = ['donor_name', 'donor_email', 'amount', 'donation_date', 'method', 'campaign', 'is_recurring', 'notes'];
+  const fields = ['donor_name', 'donor_email', 'amount', 'donation_date', 'method', 'campaign', 'is_recurring', 'notes', 'display_publicly'];
   const updates = {};
   for (const field of fields) {
     if (field in (req.body || {})) {
       let value = req.body[field];
-      if (field === 'is_recurring') value = value ? 1 : 0;
+      if (field === 'is_recurring' || field === 'display_publicly') value = value ? 1 : 0;
       if (field === 'amount') value = Number(value);
       updates[field] = value;
     }
