@@ -109,6 +109,64 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Manually-logged donations (checks, cash, or off-site platforms like
+  -- PayPal/Facebook Giving) — not a payment processor integration, just a
+  -- record-keeping + reporting tool for whatever came in.
+  CREATE TABLE IF NOT EXISTS donations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    donor_name TEXT NOT NULL,
+    donor_email TEXT DEFAULT '',
+    amount REAL NOT NULL,
+    donation_date TEXT NOT NULL,
+    method TEXT NOT NULL DEFAULT 'other' CHECK (method IN ('cash', 'check', 'online', 'in_kind', 'other')),
+    campaign TEXT DEFAULT '',
+    is_recurring INTEGER NOT NULL DEFAULT 0,
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Roster of approved, active volunteers/fosters. Distinct from the
+  -- applications table (the initial "volunteer" form submission) — a
+  -- volunteer row is created once someone's approved and sticks around for
+  -- as long as they're involved, tracking their fostering history and hours.
+  CREATE TABLE IF NOT EXISTS volunteers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL,
+    email TEXT DEFAULT '',
+    phone TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    skills TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    application_id INTEGER REFERENCES applications(id) ON DELETE SET NULL,
+    joined_date TEXT NOT NULL DEFAULT (date('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Which volunteer is fostering which bird, and when. end_date is NULL
+  -- while the foster is ongoing.
+  CREATE TABLE IF NOT EXISTS foster_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    volunteer_id INTEGER NOT NULL REFERENCES volunteers(id) ON DELETE CASCADE,
+    bird_id INTEGER NOT NULL REFERENCES birds(id) ON DELETE CASCADE,
+    start_date TEXT NOT NULL DEFAULT (date('now')),
+    end_date TEXT,
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Logged volunteer hours, one row per entry so they can be reported on by
+  -- date range as well as summed per-volunteer.
+  CREATE TABLE IF NOT EXISTS volunteer_hours (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    volunteer_id INTEGER NOT NULL REFERENCES volunteers(id) ON DELETE CASCADE,
+    log_date TEXT NOT NULL,
+    hours REAL NOT NULL,
+    activity TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_applications_type ON applications(type);
   CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
   CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_time);
@@ -118,6 +176,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at);
   CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id);
   CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
+  CREATE INDEX IF NOT EXISTS idx_donations_date ON donations(donation_date);
+  CREATE INDEX IF NOT EXISTS idx_donations_method ON donations(method);
+  CREATE INDEX IF NOT EXISTS idx_volunteers_status ON volunteers(status);
+  CREATE INDEX IF NOT EXISTS idx_foster_volunteer ON foster_assignments(volunteer_id);
+  CREATE INDEX IF NOT EXISTS idx_foster_bird ON foster_assignments(bird_id);
+  CREATE INDEX IF NOT EXISTS idx_foster_active ON foster_assignments(end_date);
+  CREATE INDEX IF NOT EXISTS idx_hours_volunteer ON volunteer_hours(volunteer_id, log_date);
 
   -- One-time tokens for the "forgot password" flow. Shared by both admin
   -- accounts and blog users (account_type distinguishes them), so a token
