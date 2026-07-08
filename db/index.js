@@ -213,6 +213,12 @@ addColumnIfMissing('users', "avatar_url TEXT DEFAULT ''");
 addColumnIfMissing('users', "role TEXT DEFAULT ''");
 addColumnIfMissing('users', "email TEXT DEFAULT ''");
 addColumnIfMissing('admins', "email TEXT DEFAULT ''");
+// Lets an admin "claim" an application so two people don't both reach out to
+// the same applicant. Stored as a plain admin id (not an inline FK — SQLite's
+// ALTER TABLE ADD COLUMN restricts REFERENCES clauses on existing tables) and
+// resolved to a username via a join in the route.
+addColumnIfMissing('applications', 'claimed_by INTEGER');
+addColumnIfMissing('applications', 'claimed_at TEXT');
 
 try {
   db.exec(`UPDATE users SET username = LOWER(username) WHERE username != LOWER(username)`);
