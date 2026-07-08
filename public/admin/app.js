@@ -16,21 +16,9 @@ const TAB_TITLES = {
   events: 'Events',
   announcements: 'News announcements',
   birds: 'Adoptable birds',
-  donations: 'Donations',
-  volunteers: 'Volunteers & fosters',
   community: 'Community',
   admins: 'Admin access',
 };
-
-const DONATION_METHOD_LABELS = {
-  cash: 'Cash',
-  check: 'Check',
-  online: 'Online',
-  in_kind: 'In-kind',
-  other: 'Other',
-};
-
-const VOLUNTEER_STATUS_LABELS = { active: 'Active', inactive: 'Inactive' };
 
 // Friendly labels for the free-form JSON fields stored in applications.data,
 // across all three form types (adoption/relinquishment/volunteer share some
@@ -157,8 +145,6 @@ function switchTab(tab) {
   const eventsView = document.getElementById('events-view');
   const announcementsView = document.getElementById('announcements-view');
   const birdsView = document.getElementById('birds-view');
-  const donationsView = document.getElementById('donations-view');
-  const volunteersView = document.getElementById('volunteers-view');
   const communityView = document.getElementById('community-view');
   const adminsView = document.getElementById('admins-view');
 
@@ -167,8 +153,6 @@ function switchTab(tab) {
   eventsView.style.display = 'none';
   announcementsView.style.display = 'none';
   birdsView.style.display = 'none';
-  donationsView.style.display = 'none';
-  volunteersView.style.display = 'none';
   communityView.style.display = 'none';
   adminsView.style.display = 'none';
 
@@ -184,12 +168,6 @@ function switchTab(tab) {
   } else if (tab === 'birds') {
     birdsView.style.display = 'block';
     loadBirds();
-  } else if (tab === 'donations') {
-    donationsView.style.display = 'block';
-    loadDonations();
-  } else if (tab === 'volunteers') {
-    volunteersView.style.display = 'block';
-    loadVolunteers();
   } else if (tab === 'community') {
     communityView.style.display = 'block';
     loadCommunity();
@@ -243,7 +221,7 @@ function renderApplicationsTable(apps) {
   wrap.innerHTML = `
     <table>
       <thead>
-        <tr><th>Submitted</th><th>Name</th><th>Email</th><th>Status</th><th>Claimed</th></tr>
+        <tr><th>Submitted</th><th>Name</th><th>Email</th><th>Status</th></tr>
       </thead>
       <tbody>
         ${apps.map((app) => `
@@ -252,11 +230,6 @@ function renderApplicationsTable(apps) {
             <td>${escapeHtml(app.data.fullName || '—')}</td>
             <td>${escapeHtml(app.data.email || '—')}</td>
             <td><span class="pill pill-${app.status}">${STATUS_LABELS[app.status]}</span></td>
-            <td>
-              ${app.claimed_by
-                ? `<span class="pill ${app.claimed_by === currentAdminId ? 'pill-approved' : 'pill-in_review'}">${app.claimed_by === currentAdminId ? 'You' : escapeHtml(app.claimed_by_username || 'Claimed')}</span>`
-                : `<button class="btn-secondary" data-quick-claim="${app.id}" style="font-size:0.78rem; padding:0.3rem 0.65rem;">Claim</button>`}
-            </td>
           </tr>
         `).join('')}
       </tbody>
@@ -266,20 +239,6 @@ function renderApplicationsTable(apps) {
   wrap.querySelectorAll('tr[data-id]').forEach((row) => {
     row.addEventListener('click', () => openApplicationModal(row.dataset.id));
   });
-
-  wrap.querySelectorAll('[data-quick-claim]').forEach((btn) =>
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      try {
-        await api(`/api/applications/${btn.dataset.quickClaim}/claim`, { method: 'POST' });
-        toast('Application claimed.');
-        loadApplications(currentTab);
-      } catch (err) {
-        alert(err.message);
-        loadApplications(currentTab);
-      }
-    })
-  );
 }
 
 async function openApplicationModal(id) {
@@ -296,18 +255,6 @@ async function openApplicationModal(id) {
           <button class="btn-ghost" id="modal-close">✕</button>
         </div>
         <p class="mono" style="color:var(--muted); font-size:0.8rem;">Submitted ${fmtDate(app.created_at)}</p>
-
-        <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:0.85rem 1rem;">
-          <span style="font-size:0.9rem;">
-            ${app.claimed_by
-              ? `<strong>${app.claimed_by === currentAdminId ? 'Claimed by you' : `Claimed by ${escapeHtml(app.claimed_by_username || 'another admin')}`}</strong>${app.claimed_at ? ` <span class="mono" style="color:var(--muted); font-size:0.78rem;">since ${fmtDate(app.claimed_at)}</span>` : ''}`
-              : `<span style="color:var(--muted);">Not claimed — anyone could reach out to this applicant.</span>`}
-          </span>
-          ${app.claimed_by
-            ? `<button class="btn-secondary" id="unclaim-btn" style="font-size:0.82rem;">Unclaim</button>`
-            : `<button class="btn-primary" id="claim-btn" style="font-size:0.82rem;">Claim</button>`}
-        </div>
-
         <div class="card">${fields}</div>
 
         <label for="status-select">Status</label>
@@ -319,10 +266,6 @@ async function openApplicationModal(id) {
 
         <label for="notes-field">Internal notes</label>
         <textarea id="notes-field" rows="3">${escapeHtml(app.admin_notes || '')}</textarea>
-
-        ${app.type === 'volunteer' ? `
-          <button class="btn-secondary" id="add-as-volunteer-btn" style="width:100%; margin-top:0.75rem;">+ Add to volunteer roster</button>
-        ` : ''}
 
         <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
           <button class="btn-danger" id="delete-app">Delete</button>
@@ -336,51 +279,6 @@ async function openApplicationModal(id) {
   document.getElementById('modal-backdrop').addEventListener('click', (e) => {
     if (e.target.id === 'modal-backdrop') closeModal();
   });
-
-  if (app.claimed_by) {
-    document.getElementById('unclaim-btn').addEventListener('click', async () => {
-      try {
-        await api(`/api/applications/${id}/unclaim`, { method: 'POST' });
-        toast('Claim released.');
-        openApplicationModal(id);
-      } catch (err) {
-        alert(`Could not unclaim: ${err.message}`);
-      }
-    });
-  } else {
-    document.getElementById('claim-btn').addEventListener('click', async () => {
-      try {
-        await api(`/api/applications/${id}/claim`, { method: 'POST' });
-        toast('Application claimed.');
-        openApplicationModal(id);
-      } catch (err) {
-        alert(err.message);
-        openApplicationModal(id);
-      }
-    });
-  }
-
-  if (app.type === 'volunteer') {
-    document.getElementById('add-as-volunteer-btn').addEventListener('click', async () => {
-      try {
-        await api('/api/volunteers', {
-          method: 'POST',
-          body: JSON.stringify({
-            full_name: app.data.fullName || '',
-            email: app.data.email || '',
-            phone: app.data.phone || '',
-            skills: app.data.interests || '',
-            application_id: app.id,
-          }),
-        });
-        toast('Added to volunteer roster.');
-        closeModal();
-        switchTab('volunteers');
-      } catch (err) {
-        alert(`Could not add volunteer: ${err.message}`);
-      }
-    });
-  }
 
   document.getElementById('save-app').addEventListener('click', async () => {
     const status = document.getElementById('status-select').value;
@@ -1098,8 +996,6 @@ function renderHomeStats(stats) {
     { key: 'adoption', label: 'Adoption applications', total: stats.adoption.total, sub: `${stats.adoption.new} new` },
     { key: 'relinquishment', label: 'Relinquishment applications', total: stats.relinquishment.total, sub: `${stats.relinquishment.new} new` },
     { key: 'events', label: 'Event RSVPs', total: stats.rsvps.total, sub: 'across all events' },
-    { key: 'donations', label: 'Donations this month', total: `$${stats.donations.this_month.toFixed(2)}`, sub: `$${stats.donations.all_time.toFixed(2)} all-time` },
-    { key: 'volunteers', label: 'Active volunteers', total: stats.volunteers.active, sub: `${stats.volunteers.active_fosters} active fosters` },
   ];
 
   wrap.innerHTML = `
@@ -1269,615 +1165,6 @@ function openAddAdminModal() {
       toast('Admin added.');
       closeModal();
       loadAdmins();
-    } catch (err) {
-      errorEl.textContent = err.message;
-    }
-  });
-}
-
-// ---------- donations ----------
-
-let donationFilters = {};
-
-async function loadDonations() {
-  const view = document.getElementById('donations-view');
-  view.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
-      <button class="btn-primary" id="new-donation-btn">+ Add donation</button>
-      <button class="btn-secondary" id="export-donations-btn">Export CSV</button>
-    </div>
-    <div class="filters">
-      <input type="date" id="donation-from" title="From date" />
-      <input type="date" id="donation-to" title="To date" />
-      <select id="donation-method-filter">
-        <option value="">All methods</option>
-        ${Object.entries(DONATION_METHOD_LABELS).map(([val, label]) => `<option value="${val}">${label}</option>`).join('')}
-      </select>
-      <button class="btn-secondary" id="donation-filter-apply">Filter</button>
-      <button class="btn-ghost" id="donation-filter-clear">Clear</button>
-    </div>
-    <div id="donations-summary-wrap" style="margin-bottom:1.25rem;"></div>
-    <div id="donations-table-wrap">Loading…</div>
-  `;
-
-  document.getElementById('new-donation-btn').addEventListener('click', () => openDonationModal());
-  document.getElementById('export-donations-btn').addEventListener('click', exportDonationsCsv);
-  document.getElementById('donation-filter-apply').addEventListener('click', () => {
-    donationFilters = {
-      from: document.getElementById('donation-from').value || undefined,
-      to: document.getElementById('donation-to').value || undefined,
-      method: document.getElementById('donation-method-filter').value || undefined,
-    };
-    refreshDonations();
-  });
-  document.getElementById('donation-filter-clear').addEventListener('click', () => {
-    donationFilters = {};
-    document.getElementById('donation-from').value = '';
-    document.getElementById('donation-to').value = '';
-    document.getElementById('donation-method-filter').value = '';
-    refreshDonations();
-  });
-
-  refreshDonations();
-}
-
-function donationQueryString() {
-  const params = new URLSearchParams();
-  Object.entries(donationFilters).forEach(([k, v]) => { if (v) params.set(k, v); });
-  return params.toString();
-}
-
-async function refreshDonations() {
-  const qs = donationQueryString();
-
-  try {
-    const [donations, summary] = await Promise.all([
-      api(`/api/donations${qs ? `?${qs}` : ''}`),
-      api(`/api/donations/summary${qs ? `?${qs}` : ''}`),
-    ]);
-    renderDonationsSummary(summary);
-    renderDonationsTable(donations);
-  } catch (e) {
-    document.getElementById('donations-table-wrap').innerHTML = `<div class="empty-state">Could not load donations.</div>`;
-  }
-}
-
-function renderDonationsSummary(summary) {
-  const wrap = document.getElementById('donations-summary-wrap');
-  const methodBreakdown = Object.entries(summary.by_method)
-    .filter(([, amount]) => amount > 0)
-    .map(([method, amount]) => `${DONATION_METHOD_LABELS[method]}: $${amount.toFixed(2)}`)
-    .join(' · ');
-
-  wrap.innerHTML = `
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:1rem;">
-      <div class="card">
-        <div style="font-size:1.8rem; font-weight:700; font-family:'Fraunces', serif; color:var(--canopy);">$${summary.total.toFixed(2)}</div>
-        <div style="font-weight:600; margin-bottom:0.15rem;">Total (filtered)</div>
-        <div class="mono" style="color:var(--muted); font-size:0.8rem;">${summary.count} donation${summary.count === 1 ? '' : 's'}</div>
-      </div>
-      <div class="card">
-        <div style="font-size:1.8rem; font-weight:700; font-family:'Fraunces', serif; color:var(--canopy);">$${summary.average.toFixed(2)}</div>
-        <div style="font-weight:600; margin-bottom:0.15rem;">Average gift</div>
-        <div class="mono" style="color:var(--muted); font-size:0.8rem;">${methodBreakdown || 'no donations yet'}</div>
-      </div>
-      <div class="card">
-        <div style="font-weight:600; margin-bottom:0.4rem;">Top donors</div>
-        ${summary.top_donors.length === 0
-          ? `<div class="mono" style="color:var(--muted); font-size:0.8rem;">No donations yet</div>`
-          : summary.top_donors.slice(0, 3).map((d) => `
-              <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:0.2rem;">
-                <span>${escapeHtml(d.donor_name)}</span><span class="mono">$${d.total.toFixed(2)}</span>
-              </div>
-            `).join('')}
-      </div>
-    </div>
-  `;
-}
-
-function renderDonationsTable(donations) {
-  const wrap = document.getElementById('donations-table-wrap');
-  if (donations.length === 0) {
-    wrap.innerHTML = `<div class="empty-state">No donations logged yet. Add your first one above.</div>`;
-    return;
-  }
-
-  wrap.innerHTML = `
-    <table>
-      <thead><tr><th>Date</th><th>Donor</th><th>Amount</th><th>Method</th><th>Campaign</th><th></th></tr></thead>
-      <tbody>
-        ${donations.map((d) => `
-          <tr>
-            <td class="mono">${escapeHtml(d.donation_date)}</td>
-            <td>${escapeHtml(d.donor_name)}${d.is_recurring ? ' <span class="pill pill-approved">Recurring</span>' : ''}</td>
-            <td class="mono">$${d.amount.toFixed(2)}</td>
-            <td>${DONATION_METHOD_LABELS[d.method] || d.method}</td>
-            <td>${escapeHtml(d.campaign || '—')}</td>
-            <td style="white-space:nowrap;">
-              <button class="btn-secondary" data-edit-donation="${d.id}" style="margin-right:0.4rem;">Edit</button>
-              <button class="btn-danger" data-delete-donation="${d.id}">Delete</button>
-            </td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-
-  wrap.querySelectorAll('[data-edit-donation]').forEach((btn) =>
-    btn.addEventListener('click', () => openDonationModal(donations.find((d) => d.id == btn.dataset.editDonation)))
-  );
-  wrap.querySelectorAll('[data-delete-donation]').forEach((btn) =>
-    btn.addEventListener('click', async () => {
-      if (!confirm('Delete this donation record permanently?')) return;
-      try {
-        await api(`/api/donations/${btn.dataset.deleteDonation}`, { method: 'DELETE' });
-        toast('Donation deleted.');
-        refreshDonations();
-      } catch (err) {
-        alert(`Could not delete: ${err.message}`);
-      }
-    })
-  );
-}
-
-function openDonationModal(donation) {
-  const isEdit = Boolean(donation);
-  document.getElementById('modal-root').innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>${isEdit ? 'Edit donation' : 'Log donation'}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
-        </div>
-        <div class="field-grid">
-          <div class="half"><label>Donor name</label><input id="d-name" value="${escapeHtml(donation?.donor_name || '')}" /></div>
-          <div class="half"><label>Donor email (optional)</label><input id="d-email" value="${escapeHtml(donation?.donor_email || '')}" /></div>
-          <div class="half"><label>Amount ($)</label><input id="d-amount" type="number" step="0.01" min="0.01" value="${donation?.amount ?? ''}" /></div>
-          <div class="half"><label>Date</label><input id="d-date" type="date" value="${donation?.donation_date || new Date().toISOString().slice(0, 10)}" /></div>
-          <div class="half"><label>Method</label>
-            <select id="d-method">
-              ${Object.entries(DONATION_METHOD_LABELS).map(([val, label]) =>
-                `<option value="${val}" ${(donation?.method || 'other') === val ? 'selected' : ''}>${label}</option>`
-              ).join('')}
-            </select>
-          </div>
-          <div class="half"><label>Campaign (optional)</label><input id="d-campaign" value="${escapeHtml(donation?.campaign || '')}" placeholder="e.g. Spring appeal" /></div>
-          <div><label><input type="checkbox" id="d-recurring" style="width:auto; display:inline-block; margin-right:0.4rem;" ${donation?.is_recurring ? 'checked' : ''}/> Recurring donor</label></div>
-          <div><label>Notes (optional)</label><textarea id="d-notes" rows="2">${escapeHtml(donation?.notes || '')}</textarea></div>
-        </div>
-        <div class="error-text" id="donation-error"></div>
-        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
-          ${isEdit ? `<button class="btn-danger" id="delete-donation">Delete</button>` : `<span></span>`}
-          <button class="btn-primary" id="save-donation">${isEdit ? 'Save changes' : 'Log donation'}</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-backdrop') closeModal();
-  });
-
-  document.getElementById('save-donation').addEventListener('click', async () => {
-    const errorEl = document.getElementById('donation-error');
-    errorEl.textContent = '';
-    const payload = {
-      donor_name: document.getElementById('d-name').value.trim(),
-      donor_email: document.getElementById('d-email').value.trim(),
-      amount: Number(document.getElementById('d-amount').value),
-      donation_date: document.getElementById('d-date').value,
-      method: document.getElementById('d-method').value,
-      campaign: document.getElementById('d-campaign').value.trim(),
-      is_recurring: document.getElementById('d-recurring').checked,
-      notes: document.getElementById('d-notes').value.trim(),
-    };
-
-    if (!payload.donor_name) return (errorEl.textContent = 'Donor name is required.');
-    if (!payload.amount || payload.amount <= 0) return (errorEl.textContent = 'Enter a valid amount.');
-    if (!payload.donation_date) return (errorEl.textContent = 'Date is required.');
-
-    try {
-      if (isEdit) {
-        await api(`/api/donations/${donation.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        toast('Donation updated.');
-      } else {
-        await api('/api/donations', { method: 'POST', body: JSON.stringify(payload) });
-        toast('Donation logged.');
-      }
-      closeModal();
-      refreshDonations();
-    } catch (err) {
-      errorEl.textContent = err.message;
-    }
-  });
-
-  if (isEdit) {
-    document.getElementById('delete-donation').addEventListener('click', async () => {
-      if (!confirm('Delete this donation record permanently?')) return;
-      try {
-        await api(`/api/donations/${donation.id}`, { method: 'DELETE' });
-        toast('Donation deleted.');
-        closeModal();
-        refreshDonations();
-      } catch (err) {
-        alert(`Could not delete: ${err.message}`);
-      }
-    });
-  }
-}
-
-function exportDonationsCsv() {
-  const qs = donationQueryString();
-  window.open(`${API_BASE}/api/donations/export${qs ? `?${qs}` : ''}`, '_blank');
-}
-
-// ---------- volunteers & fosters ----------
-
-async function loadVolunteers() {
-  const view = document.getElementById('volunteers-view');
-  view.innerHTML = `
-    <div style="margin-bottom:1rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.75rem;">
-      <button class="btn-primary" id="new-volunteer-btn">+ Add volunteer</button>
-      <select id="volunteer-status-filter" style="width:auto;">
-        <option value="">All statuses</option>
-        <option value="active">Active</option>
-        <option value="inactive">Inactive</option>
-      </select>
-    </div>
-    <div id="volunteers-table-wrap">Loading…</div>
-  `;
-  document.getElementById('new-volunteer-btn').addEventListener('click', () => openVolunteerModal());
-  document.getElementById('volunteer-status-filter').addEventListener('change', (e) => refreshVolunteers(e.target.value || undefined));
-
-  refreshVolunteers();
-}
-
-async function refreshVolunteers(status) {
-  try {
-    const volunteers = await api(`/api/volunteers${status ? `?status=${status}` : ''}`);
-    renderVolunteersTable(volunteers);
-  } catch (e) {
-    document.getElementById('volunteers-table-wrap').innerHTML = `<div class="empty-state">Could not load volunteers.</div>`;
-  }
-}
-
-function renderVolunteersTable(volunteers) {
-  const wrap = document.getElementById('volunteers-table-wrap');
-  if (volunteers.length === 0) {
-    wrap.innerHTML = `<div class="empty-state">No volunteers on the roster yet. Add one above, or use "Add to volunteer roster" from an approved volunteer application.</div>`;
-    return;
-  }
-
-  wrap.innerHTML = `
-    <table>
-      <thead><tr><th>Name</th><th>Contact</th><th>Status</th><th>Active fosters</th><th>Total hours</th><th></th></tr></thead>
-      <tbody>
-        ${volunteers.map((v) => `
-          <tr class="clickable" data-id="${v.id}">
-            <td>${escapeHtml(v.full_name)}</td>
-            <td class="mono" style="font-size:0.82rem;">${escapeHtml(v.email || '—')}${v.phone ? `<br/>${escapeHtml(v.phone)}` : ''}</td>
-            <td><span class="pill ${v.status === 'active' ? 'pill-approved' : 'pill-archived'}">${VOLUNTEER_STATUS_LABELS[v.status]}</span></td>
-            <td>${v.active_fosters}</td>
-            <td class="mono">${v.total_hours}</td>
-            <td></td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-
-  wrap.querySelectorAll('tr[data-id]').forEach((row) =>
-    row.addEventListener('click', () => openVolunteerDetail(row.dataset.id))
-  );
-}
-
-function openVolunteerModal(volunteer) {
-  const isEdit = Boolean(volunteer);
-  document.getElementById('modal-root').innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>${isEdit ? 'Edit volunteer' : 'Add volunteer'}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
-        </div>
-        <div class="field-grid">
-          <div><label>Full name</label><input id="v-name" value="${escapeHtml(volunteer?.full_name || '')}" /></div>
-          <div class="half"><label>Email</label><input id="v-email" value="${escapeHtml(volunteer?.email || '')}" /></div>
-          <div class="half"><label>Phone</label><input id="v-phone" value="${escapeHtml(volunteer?.phone || '')}" /></div>
-          <div class="half"><label>Status</label>
-            <select id="v-status">
-              <option value="active" ${(!volunteer || volunteer.status === 'active') ? 'selected' : ''}>Active</option>
-              <option value="inactive" ${volunteer?.status === 'inactive' ? 'selected' : ''}>Inactive</option>
-            </select>
-          </div>
-          <div class="half"><label>Joined</label><input id="v-joined" type="date" value="${volunteer?.joined_date || new Date().toISOString().slice(0, 10)}" /></div>
-          <div><label>Skills / interests (optional)</label><input id="v-skills" value="${escapeHtml(volunteer?.skills || '')}" /></div>
-          <div><label>Notes (optional)</label><textarea id="v-notes" rows="2">${escapeHtml(volunteer?.notes || '')}</textarea></div>
-        </div>
-        <div class="error-text" id="volunteer-error"></div>
-        <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
-          <button class="btn-primary" id="save-volunteer">${isEdit ? 'Save changes' : 'Add volunteer'}</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-backdrop') closeModal();
-  });
-
-  document.getElementById('save-volunteer').addEventListener('click', async () => {
-    const errorEl = document.getElementById('volunteer-error');
-    errorEl.textContent = '';
-    const payload = {
-      full_name: document.getElementById('v-name').value.trim(),
-      email: document.getElementById('v-email').value.trim(),
-      phone: document.getElementById('v-phone').value.trim(),
-      status: document.getElementById('v-status').value,
-      joined_date: document.getElementById('v-joined').value,
-      skills: document.getElementById('v-skills').value.trim(),
-      notes: document.getElementById('v-notes').value.trim(),
-    };
-
-    if (!payload.full_name) return (errorEl.textContent = 'Full name is required.');
-
-    try {
-      if (isEdit) {
-        await api(`/api/volunteers/${volunteer.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        toast('Volunteer updated.');
-      } else {
-        await api('/api/volunteers', { method: 'POST', body: JSON.stringify(payload) });
-        toast('Volunteer added.');
-      }
-      closeModal();
-      refreshVolunteers();
-    } catch (err) {
-      errorEl.textContent = err.message;
-    }
-  });
-}
-
-async function openVolunteerDetail(id) {
-  const v = await api(`/api/volunteers/${id}`);
-
-  const fostersHtml = v.fosters.length === 0
-    ? `<div class="mono" style="color:var(--muted); font-size:0.85rem; margin-bottom:0.75rem;">No foster history yet.</div>`
-    : `<table style="margin-bottom:0.75rem;">
-        <thead><tr><th>Bird</th><th>Start</th><th>End</th><th>Notes</th><th></th></tr></thead>
-        <tbody>
-          ${v.fosters.map((f) => `
-            <tr>
-              <td>${escapeHtml(f.bird_name)} <span class="mono" style="color:var(--muted); font-size:0.78rem;">(${escapeHtml(f.bird_species)})</span></td>
-              <td class="mono">${escapeHtml(f.start_date)}</td>
-              <td>${f.end_date ? `<span class="mono">${escapeHtml(f.end_date)}</span>` : `<span class="pill pill-approved">Ongoing</span>`}</td>
-              <td style="font-size:0.85rem;">${escapeHtml(f.notes || '—')}</td>
-              <td style="white-space:nowrap;">
-                ${!f.end_date ? `<button class="btn-secondary" data-end-foster="${f.id}" style="font-size:0.8rem; padding:0.35rem 0.7rem;">End foster</button>` : ''}
-                <button class="btn-danger" data-delete-foster="${f.id}" style="font-size:0.8rem; padding:0.35rem 0.7rem;">Remove</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>`;
-
-  const hoursHtml = v.hours.length === 0
-    ? `<div class="mono" style="color:var(--muted); font-size:0.85rem; margin-bottom:0.75rem;">No hours logged yet.</div>`
-    : `<table style="margin-bottom:0.75rem;">
-        <thead><tr><th>Date</th><th>Hours</th><th>Activity</th><th></th></tr></thead>
-        <tbody>
-          ${v.hours.map((h) => `
-            <tr>
-              <td class="mono">${escapeHtml(h.log_date)}</td>
-              <td class="mono">${h.hours}</td>
-              <td style="font-size:0.85rem;">${escapeHtml(h.activity || '—')}</td>
-              <td><button class="btn-danger" data-delete-hours="${h.id}" style="font-size:0.8rem; padding:0.35rem 0.7rem;">Delete</button></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>`;
-
-  document.getElementById('modal-root').innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal" style="max-width:720px;">
-        <div class="modal-header">
-          <h3>${escapeHtml(v.full_name)}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
-        </div>
-        <p class="mono" style="color:var(--muted); font-size:0.82rem;">
-          ${escapeHtml(v.email || 'no email')} ${v.phone ? `· ${escapeHtml(v.phone)}` : ''} · Joined ${escapeHtml(v.joined_date)}
-          · <span class="pill ${v.status === 'active' ? 'pill-approved' : 'pill-archived'}">${VOLUNTEER_STATUS_LABELS[v.status]}</span>
-        </p>
-        ${v.skills ? `<p style="font-size:0.9rem; margin-bottom:0.5rem;"><strong>Skills/interests:</strong> ${escapeHtml(v.skills)}</p>` : ''}
-        ${v.notes ? `<p style="font-size:0.9rem; margin-bottom:0.5rem;"><strong>Notes:</strong> ${escapeHtml(v.notes)}</p>` : ''}
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin:1.25rem 0 0.5rem;">
-          <h4 style="margin:0;">Foster history</h4>
-          <button class="btn-secondary" id="assign-foster-btn" style="font-size:0.82rem;">+ Assign a bird</button>
-        </div>
-        ${fostersHtml}
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin:1.25rem 0 0.5rem;">
-          <h4 style="margin:0;">Hours logged (total: ${v.total_hours})</h4>
-          <button class="btn-secondary" id="log-hours-btn" style="font-size:0.82rem;">+ Log hours</button>
-        </div>
-        ${hoursHtml}
-
-        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
-          <button class="btn-danger" id="delete-volunteer">Remove from roster</button>
-          <button class="btn-secondary" id="edit-volunteer-btn">Edit details</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-backdrop') closeModal();
-  });
-
-  document.getElementById('edit-volunteer-btn').addEventListener('click', () => openVolunteerModal(v));
-  document.getElementById('assign-foster-btn').addEventListener('click', () => openAssignFosterModal(v.id));
-  document.getElementById('log-hours-btn').addEventListener('click', () => openLogHoursModal(v.id));
-
-  document.getElementById('delete-volunteer').addEventListener('click', async () => {
-    if (!confirm(`Remove ${v.full_name} from the volunteer roster? This also deletes their foster history and hours log.`)) return;
-    try {
-      await api(`/api/volunteers/${v.id}`, { method: 'DELETE' });
-      toast('Volunteer removed.');
-      closeModal();
-      refreshVolunteers();
-    } catch (err) {
-      alert(`Could not remove: ${err.message}`);
-    }
-  });
-
-  document.querySelectorAll('[data-end-foster]').forEach((btn) =>
-    btn.addEventListener('click', async () => {
-      try {
-        await api(`/api/volunteers/fosters/${btn.dataset.endFoster}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ end_date: new Date().toISOString().slice(0, 10) }),
-        });
-        toast('Foster ended.');
-        openVolunteerDetail(id);
-        refreshVolunteers();
-      } catch (err) {
-        alert(`Could not update: ${err.message}`);
-      }
-    })
-  );
-
-  document.querySelectorAll('[data-delete-foster]').forEach((btn) =>
-    btn.addEventListener('click', async () => {
-      if (!confirm('Remove this foster record permanently?')) return;
-      try {
-        await api(`/api/volunteers/fosters/${btn.dataset.deleteFoster}`, { method: 'DELETE' });
-        toast('Foster record removed.');
-        openVolunteerDetail(id);
-        refreshVolunteers();
-      } catch (err) {
-        alert(`Could not remove: ${err.message}`);
-      }
-    })
-  );
-
-  document.querySelectorAll('[data-delete-hours]').forEach((btn) =>
-    btn.addEventListener('click', async () => {
-      if (!confirm('Delete this hours entry permanently?')) return;
-      try {
-        await api(`/api/volunteers/hours/${btn.dataset.deleteHours}`, { method: 'DELETE' });
-        toast('Hours entry deleted.');
-        openVolunteerDetail(id);
-        refreshVolunteers();
-      } catch (err) {
-        alert(`Could not delete: ${err.message}`);
-      }
-    })
-  );
-}
-
-async function openAssignFosterModal(volunteerId) {
-  let birds = [];
-  try {
-    birds = await api('/api/birds?all=1');
-  } catch (e) {
-    alert('Could not load birds.');
-    return;
-  }
-
-  document.getElementById('modal-root').innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>Assign a foster bird</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
-        </div>
-        <label>Bird</label>
-        <select id="foster-bird">
-          ${birds.map((b) => `<option value="${b.id}">${escapeHtml(b.name)} (${escapeHtml(b.species)}) — ${BIRD_STATUS_LABELS[b.status]}</option>`).join('')}
-        </select>
-        <label>Start date</label>
-        <input id="foster-start" type="date" value="${new Date().toISOString().slice(0, 10)}" />
-        <label>Notes (optional)</label>
-        <textarea id="foster-notes" rows="2"></textarea>
-        <div class="error-text" id="foster-error"></div>
-        <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
-          <button class="btn-primary" id="save-foster">Assign</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-backdrop') closeModal();
-  });
-
-  document.getElementById('save-foster').addEventListener('click', async () => {
-    const errorEl = document.getElementById('foster-error');
-    if (birds.length === 0) return (errorEl.textContent = 'No birds available to assign.');
-    try {
-      await api(`/api/volunteers/${volunteerId}/fosters`, {
-        method: 'POST',
-        body: JSON.stringify({
-          bird_id: Number(document.getElementById('foster-bird').value),
-          start_date: document.getElementById('foster-start').value,
-          notes: document.getElementById('foster-notes').value.trim(),
-        }),
-      });
-      toast('Foster assigned.');
-      openVolunteerDetail(volunteerId);
-      refreshVolunteers();
-    } catch (err) {
-      errorEl.textContent = err.message;
-    }
-  });
-}
-
-function openLogHoursModal(volunteerId) {
-  document.getElementById('modal-root').innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>Log volunteer hours</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
-        </div>
-        <label>Date</label>
-        <input id="hours-date" type="date" value="${new Date().toISOString().slice(0, 10)}" />
-        <label>Hours</label>
-        <input id="hours-value" type="number" step="0.25" min="0.25" />
-        <label>Activity (optional)</label>
-        <input id="hours-activity" placeholder="e.g. Cage cleaning, event staffing" />
-        <div class="error-text" id="hours-error"></div>
-        <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
-          <button class="btn-primary" id="save-hours">Log hours</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-backdrop') closeModal();
-  });
-
-  document.getElementById('save-hours').addEventListener('click', async () => {
-    const errorEl = document.getElementById('hours-error');
-    const payload = {
-      log_date: document.getElementById('hours-date').value,
-      hours: Number(document.getElementById('hours-value').value),
-      activity: document.getElementById('hours-activity').value.trim(),
-    };
-    if (!payload.log_date) return (errorEl.textContent = 'Date is required.');
-    if (!payload.hours || payload.hours <= 0) return (errorEl.textContent = 'Enter a valid number of hours.');
-
-    try {
-      await api(`/api/volunteers/${volunteerId}/hours`, { method: 'POST', body: JSON.stringify(payload) });
-      toast('Hours logged.');
-      openVolunteerDetail(volunteerId);
-      refreshVolunteers();
     } catch (err) {
       errorEl.textContent = err.message;
     }

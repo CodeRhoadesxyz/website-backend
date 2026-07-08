@@ -92,11 +92,6 @@ router.delete('/:id', requireAdmin, (req, res) => {
 
   const result = db.prepare('DELETE FROM admins WHERE id = ?').run(targetId);
   if (result.changes === 0) return res.status(404).json({ error: 'Admin not found.' });
-
-  // Free up anything this admin had claimed rather than leaving it stuck
-  // "claimed" by an account that no longer exists.
-  db.prepare('UPDATE applications SET claimed_by = NULL, claimed_at = NULL WHERE claimed_by = ?').run(targetId);
-
   res.json({ ok: true });
 });
 
