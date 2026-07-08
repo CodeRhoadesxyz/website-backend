@@ -17,6 +17,15 @@
   let currentUser = null;
   let container = null;
 
+  // Mirrors the backend's POSTER_ROLES list — this is only for showing/hiding
+  // the "+ New post" button appropriately. The server enforces the real rule
+  // independently, so this being out of sync would just be a cosmetic issue,
+  // not a security one.
+  const POSTER_ROLES = ['founder', 'vice president', 'website developer'];
+  function canPost(user) {
+    return Boolean(user && user.role) && POSTER_ROLES.includes(user.role.trim().toLowerCase());
+  }
+
   function fmtDate(iso) {
     const d = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z');
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -82,6 +91,7 @@
     const bar = document.getElementById('rw-blog-authbar');
 
     if (currentUser) {
+      const eligible = canPost(currentUser);
       bar.innerHTML = `
         <div class="rw-blog-authbar">
           <span style="display:flex; align-items:center; gap:0.5rem;">
@@ -89,15 +99,17 @@
             Signed in as <strong>${escapeHtml(currentUser.display_name)}</strong>${roleBadgeHtml(currentUser.role)}
           </span>
           <div>
-            <button class="rw-blog-link-btn" id="rw-new-post-btn">+ New post</button>
+            ${eligible ? `<button class="rw-blog-link-btn" id="rw-new-post-btn">+ New post</button>` : ''}
             <button class="rw-blog-link-btn" id="rw-edit-profile-btn">Edit profile</button>
             <button class="rw-blog-link-btn" id="rw-logout-btn">Log out</button>
           </div>
         </div>
+        ${eligible ? '' : '<p style="color:#6b6b6b; font-size:0.85rem; margin:-0.75rem 0 1.25rem;">Only Founders, Vice Presidents, and Website Developers can create new posts — but you can comment on any post below.</p>'}
         <div id="rw-profile-form-slot"></div>
         <div id="rw-composer-slot"></div>
       `;
-      document.getElementById('rw-new-post-btn').addEventListener('click', toggleComposer);
+      const newPostBtn = document.getElementById('rw-new-post-btn');
+      if (newPostBtn) newPostBtn.addEventListener('click', toggleComposer);
       document.getElementById('rw-edit-profile-btn').addEventListener('click', toggleProfileForm);
       document.getElementById('rw-logout-btn').addEventListener('click', async () => {
         await authFetch(apiBase, '/api/users/logout', { method: 'POST' });

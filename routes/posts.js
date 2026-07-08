@@ -4,6 +4,15 @@ const { requireUser, attachIdentity } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Only these admin-assigned roles (see the Community tab in admin) can create
+// new posts. Anyone signed up can still comment on any post regardless of
+// role — this only gates who can start a new thread.
+const POSTER_ROLES = ['founder', 'vice president', 'website developer'];
+
+function canPost(user) {
+  return Boolean(user.role) && POSTER_ROLES.includes(user.role.trim().toLowerCase());
+}
+
 function excerpt(body, len = 220) {
   const clean = body.replace(/\s+/g, ' ').trim();
   return clean.length > len ? clean.slice(0, len).trim() + '…' : clean;
@@ -47,6 +56,12 @@ router.get('/:id', (req, res) => {
 });
 
 router.post('/', requireUser, (req, res) => {
+  if (!canPost(req.user)) {
+    return res.status(403).json({
+      error: 'Only Founders, Vice Presidents, and Website Developers can create new posts. Everyone can comment though!',
+    });
+  }
+
   const { title, body } = req.body || {};
   if (!title || !body) {
     return res.status(400).json({ error: 'Title and body are required.' });
