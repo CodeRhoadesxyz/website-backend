@@ -198,6 +198,41 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_reset_tokens_lookup ON password_reset_tokens(token_hash, expires_at);
+
+  -- Every admin-initiated action (creates/updates/deletes across the portal,
+  -- plus sign-in/sign-out and password resets). Written automatically by the
+  -- audit middleware in server.js, so new routes get logged without any
+  -- extra code — see lib/auditLog.js for how entries are built.
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id INTEGER,
+    admin_username TEXT NOT NULL DEFAULT '',
+    action TEXT NOT NULL,
+    method TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL DEFAULT '',
+    details TEXT DEFAULT '',
+    ip TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
+  CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON audit_log(admin_id);
+
+  -- Single-row table (id is always 1) holding the site's maintenance-mode
+  -- state. starts_at/ends_at are optional — NULL means "no scheduled
+  -- start/end", i.e. it takes effect immediately and stays on until an admin
+  -- turns it off.
+  CREATE TABLE IF NOT EXISTS maintenance_mode (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled INTEGER NOT NULL DEFAULT 0,
+    message TEXT NOT NULL DEFAULT 'We''re currently performing scheduled maintenance. Please check back soon.',
+    starts_at TEXT,
+    ends_at TEXT,
+    updated_by INTEGER,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  INSERT OR IGNORE INTO maintenance_mode (id, enabled) VALUES (1, 0);
 `);
 
 function addColumnIfMissing(table, columnDef) {
