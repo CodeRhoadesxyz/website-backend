@@ -20,6 +20,8 @@ const TAB_TITLES = {
   volunteers: 'Volunteers & fosters',
   community: 'Community',
   admins: 'Admin access',
+  'audit-log': 'Audit log',
+  maintenance: 'Maintenance mode',
 };
 
 const DONATION_METHOD_LABELS = {
@@ -161,6 +163,8 @@ function switchTab(tab) {
   const volunteersView = document.getElementById('volunteers-view');
   const communityView = document.getElementById('community-view');
   const adminsView = document.getElementById('admins-view');
+  const auditLogView = document.getElementById('audit-log-view');
+  const maintenanceView = document.getElementById('maintenance-view');
 
   homeView.style.display = 'none';
   appView.style.display = 'none';
@@ -171,6 +175,8 @@ function switchTab(tab) {
   volunteersView.style.display = 'none';
   communityView.style.display = 'none';
   adminsView.style.display = 'none';
+  auditLogView.style.display = 'none';
+  maintenanceView.style.display = 'none';
 
   if (tab === 'home') {
     homeView.style.display = 'block';
@@ -196,6 +202,12 @@ function switchTab(tab) {
   } else if (tab === 'admins') {
     adminsView.style.display = 'block';
     loadAdmins();
+  } else if (tab === 'audit-log') {
+    auditLogView.style.display = 'block';
+    loadAuditLog();
+  } else if (tab === 'maintenance') {
+    maintenanceView.style.display = 'block';
+    loadMaintenance();
   } else {
     appView.style.display = 'block';
     loadApplications(tab);
@@ -1144,14 +1156,15 @@ function renderAdminsTable(admins) {
   const wrap = document.getElementById('admins-table-wrap');
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Created</th><th>Username</th><th></th></tr></thead>
+      <thead><tr><th>Created</th><th>Username</th><th>Email</th><th></th></tr></thead>
       <tbody>
         ${admins.map((a) => `
           <tr>
             <td class="mono">${fmtDate(a.created_at)}</td>
             <td>${escapeHtml(a.username)}${a.id === currentAdminId ? ' <span class="pill pill-approved">You</span>' : ''}</td>
+            <td class="mono" style="font-size:0.85rem; color:${a.email ? 'var(--text)' : 'var(--muted)'};">${escapeHtml(a.email || 'Not set')}</td>
             <td style="white-space:nowrap;">
-              <button class="btn-secondary" data-edit-admin="${a.id}" data-username="${escapeHtml(a.username)}" style="margin-right:0.4rem;">Edit</button>
+              <button class="btn-secondary" data-edit-admin="${a.id}" data-username="${escapeHtml(a.username)}" data-email="${escapeHtml(a.email || '')}" style="margin-right:0.4rem;">Edit</button>
               ${a.id === currentAdminId
                 ? `<span style="color:var(--muted); font-size:0.82rem;">Can't remove your own account</span>`
                 : `<button class="btn-danger" data-delete-admin="${a.id}" data-username="${escapeHtml(a.username)}">Remove</button>`}
@@ -1162,11 +1175,12 @@ function renderAdminsTable(admins) {
     </table>
     <p style="color:var(--muted); font-size:0.82rem; margin-top:0.75rem;">
       Anyone added here can sign in to this entire admin panel — applications, events, community moderation, everything. Only add people you trust with full access.
+      Email is used for password-reset links, so it's worth keeping current.
     </p>
   `;
 
   wrap.querySelectorAll('[data-edit-admin]').forEach((btn) =>
-    btn.addEventListener('click', () => openEditAdminModal(btn.dataset.editAdmin, btn.dataset.username))
+    btn.addEventListener('click', () => openEditAdminModal(btn.dataset.editAdmin, btn.dataset.username, btn.dataset.email))
   );
 
   wrap.querySelectorAll('[data-delete-admin]').forEach((btn) =>
@@ -1183,7 +1197,7 @@ function renderAdminsTable(admins) {
   );
 }
 
-function openEditAdminModal(id, currentUsername) {
+function openEditAdminModal(id, currentUsername, currentEmail) {
   document.getElementById('modal-root').innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal">
@@ -1193,6 +1207,8 @@ function openEditAdminModal(id, currentUsername) {
         </div>
         <label>Username</label>
         <input id="edit-admin-username" value="${escapeHtml(currentUsername)}" />
+        <label>Email</label>
+        <input id="edit-admin-email" type="email" value="${escapeHtml(currentEmail || '')}" placeholder="Used for password-reset links" />
         <label>New password (optional)</label>
         <input id="edit-admin-password" type="password" placeholder="Leave blank to keep current password" />
         <div class="error-text" id="edit-admin-error"></div>
@@ -1210,6 +1226,7 @@ function openEditAdminModal(id, currentUsername) {
 
   document.getElementById('save-admin-btn').addEventListener('click', async () => {
     const username = document.getElementById('edit-admin-username').value.trim();
+    const email = document.getElementById('edit-admin-email').value.trim();
     const password = document.getElementById('edit-admin-password').value;
     const errorEl = document.getElementById('edit-admin-error');
     errorEl.textContent = '';
@@ -1219,7 +1236,7 @@ function openEditAdminModal(id, currentUsername) {
       return;
     }
 
-    const payload = { username };
+    const payload = { username, email };
     if (password) payload.password = password;
 
     try {
@@ -1243,6 +1260,8 @@ function openAddAdminModal() {
         </div>
         <label>Username</label>
         <input id="new-admin-username" />
+        <label>Email (optional)</label>
+        <input id="new-admin-email" type="email" placeholder="Used for password-reset links" />
         <label>Password</label>
         <input id="new-admin-password" type="password" placeholder="At least 8 characters" />
         <div class="error-text" id="new-admin-error"></div>
@@ -1260,12 +1279,13 @@ function openAddAdminModal() {
 
   document.getElementById('create-admin-btn').addEventListener('click', async () => {
     const username = document.getElementById('new-admin-username').value.trim();
+    const email = document.getElementById('new-admin-email').value.trim();
     const password = document.getElementById('new-admin-password').value;
     const errorEl = document.getElementById('new-admin-error');
     errorEl.textContent = '';
 
     try {
-      await api('/api/admin-users', { method: 'POST', body: JSON.stringify({ username, password }) });
+      await api('/api/admin-users', { method: 'POST', body: JSON.stringify({ username, email, password }) });
       toast('Admin added.');
       closeModal();
       loadAdmins();
@@ -1882,6 +1902,261 @@ function openLogHoursModal(volunteerId) {
       errorEl.textContent = err.message;
     }
   });
+}
+
+// ---------- audit log ----------
+
+let auditLogPage = 1;
+const AUDIT_LOG_LIMIT = 50;
+
+async function loadAuditLog() {
+  const view = document.getElementById('audit-log-view');
+  view.innerHTML = `
+    <div class="filters">
+      <input id="audit-search" placeholder="Search action, admin, or path…" style="max-width:260px;" />
+      <select id="audit-admin-filter"><option value="">All admins</option></select>
+      <input id="audit-from" type="date" title="From date" />
+      <input id="audit-to" type="date" title="To date" />
+      <button class="btn-secondary" id="audit-export-btn">Export CSV</button>
+    </div>
+    <div id="audit-log-table-wrap">Loading…</div>
+    <div id="audit-log-pager" style="display:flex; justify-content:center; gap:0.75rem; margin-top:1rem;"></div>
+  `;
+
+  try {
+    const admins = await api('/api/audit-log/admins');
+    const sel = document.getElementById('audit-admin-filter');
+    admins.forEach((a) => {
+      const opt = document.createElement('option');
+      opt.value = a.admin_id;
+      opt.textContent = a.admin_username;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    // filter dropdown is a nice-to-have; don't block the log itself if this fails
+  }
+
+  auditLogPage = 1;
+  await refreshAuditLog();
+
+  document.getElementById('audit-search').addEventListener('input', debounce(() => { auditLogPage = 1; refreshAuditLog(); }, 300));
+  document.getElementById('audit-admin-filter').addEventListener('change', () => { auditLogPage = 1; refreshAuditLog(); });
+  document.getElementById('audit-from').addEventListener('change', () => { auditLogPage = 1; refreshAuditLog(); });
+  document.getElementById('audit-to').addEventListener('change', () => { auditLogPage = 1; refreshAuditLog(); });
+  document.getElementById('audit-export-btn').addEventListener('click', () => {
+    window.open(`${API_BASE}/api/audit-log/export${auditLogQueryString()}`, '_blank');
+  });
+}
+
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+function auditLogQueryString(extra = {}) {
+  const params = new URLSearchParams();
+  const q = document.getElementById('audit-search')?.value.trim();
+  const adminId = document.getElementById('audit-admin-filter')?.value;
+  const from = document.getElementById('audit-from')?.value;
+  const to = document.getElementById('audit-to')?.value;
+  if (q) params.set('q', q);
+  if (adminId) params.set('admin_id', adminId);
+  if (from) params.set('from', from);
+  if (to) params.set('to', `${to} 23:59:59`);
+  Object.entries(extra).forEach(([k, v]) => params.set(k, v));
+  const str = params.toString();
+  return str ? `?${str}` : '';
+}
+
+async function refreshAuditLog() {
+  const wrap = document.getElementById('audit-log-table-wrap');
+  wrap.innerHTML = 'Loading…';
+  try {
+    const data = await api(`/api/audit-log${auditLogQueryString({ page: auditLogPage, limit: AUDIT_LOG_LIMIT })}`);
+    renderAuditLog(data);
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty-state">Could not load the audit log.</div>`;
+  }
+}
+
+function renderAuditLog(data) {
+  const wrap = document.getElementById('audit-log-table-wrap');
+  const pager = document.getElementById('audit-log-pager');
+
+  if (data.entries.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No matching actions logged.</div>`;
+    pager.innerHTML = '';
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Path</th><th>IP</th></tr></thead>
+      <tbody>
+        ${data.entries.map((e) => `
+          <tr>
+            <td class="mono" style="white-space:nowrap;">${fmtDate(e.created_at)}</td>
+            <td>${escapeHtml(e.admin_username || '—')}</td>
+            <td>${escapeHtml(e.action)}</td>
+            <td class="mono" style="font-size:0.78rem; color:var(--muted);">${escapeHtml(e.method)} ${escapeHtml(e.path)}</td>
+            <td class="mono" style="font-size:0.78rem; color:var(--muted);">${escapeHtml(e.ip || '—')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  const totalPages = Math.max(1, Math.ceil(data.total / data.limit));
+  pager.innerHTML = `
+    <button class="btn-secondary" id="audit-prev" ${data.page <= 1 ? 'disabled' : ''}>← Previous</button>
+    <span class="mono" style="align-self:center; color:var(--muted); font-size:0.85rem;">Page ${data.page} of ${totalPages} · ${data.total} total</span>
+    <button class="btn-secondary" id="audit-next" ${data.page >= totalPages ? 'disabled' : ''}>Next →</button>
+  `;
+  document.getElementById('audit-prev')?.addEventListener('click', () => { auditLogPage -= 1; refreshAuditLog(); });
+  document.getElementById('audit-next')?.addEventListener('click', () => { auditLogPage += 1; refreshAuditLog(); });
+}
+
+// ---------- maintenance mode ----------
+
+let maintenanceCountdownTimer = null;
+
+async function loadMaintenance() {
+  const view = document.getElementById('maintenance-view');
+  view.innerHTML = `<div id="maintenance-wrap">Loading…</div>`;
+
+  try {
+    const status = await api('/api/maintenance');
+    renderMaintenance(status);
+  } catch (e) {
+    document.getElementById('maintenance-wrap').innerHTML = `<div class="empty-state">Could not load maintenance settings.</div>`;
+  }
+}
+
+function renderMaintenance(status) {
+  if (maintenanceCountdownTimer) clearInterval(maintenanceCountdownTimer);
+
+  const wrap = document.getElementById('maintenance-wrap');
+  const stateLabel = status.active ? 'Live — visitors are currently blocked' : status.scheduled ? 'Scheduled — not blocking yet' : 'Off — site is fully open';
+  const statePill = status.active ? 'pill-declined' : status.scheduled ? 'pill-in_review' : 'pill-approved';
+
+  wrap.innerHTML = `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+        <div>
+          <span class="pill ${statePill}">${stateLabel}</span>
+        </div>
+        <div id="maintenance-countdown" class="mono" style="font-size:0.95rem; color:var(--coral); font-weight:700;"></div>
+      </div>
+      <p style="color:var(--muted); font-size:0.85rem;">
+        When on, every public API call — adoption/relinquishment/volunteer forms, the adoptable birds list, events,
+        announcements, and the community blog — is turned away with your message below. This admin panel stays
+        reachable to signed-in admins so you can always switch it back off.
+      </p>
+    </div>
+
+    <div class="card">
+      <label style="display:flex; align-items:center; gap:0.6rem; margin-top:0;">
+        <input type="checkbox" id="maintenance-enabled" ${status.enabled ? 'checked' : ''} style="width:auto;" />
+        Turn on maintenance mode
+      </label>
+
+      <label>Message shown to visitors</label>
+      <textarea id="maintenance-message" rows="2">${escapeHtml(status.message)}</textarea>
+
+      <div class="field-grid">
+        <div class="half">
+          <label>Start (optional)</label>
+          <input id="maintenance-starts" type="datetime-local" value="${fmtDateInput(status.starts_at)}" />
+        </div>
+        <div class="half">
+          <label>End (optional)</label>
+          <input id="maintenance-ends" type="datetime-local" value="${fmtDateInput(status.ends_at)}" />
+        </div>
+      </div>
+      <p style="color:var(--muted); font-size:0.8rem; margin-top:0.4rem;">
+        Leave start blank to apply immediately once you save. Leave end blank to stay on until you manually turn it off —
+        set an end time and it switches back off automatically (and a countdown shows visitors when to expect it back).
+      </p>
+
+      <div class="error-text" id="maintenance-error"></div>
+      <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+        <button class="btn-primary" id="save-maintenance-btn">Save</button>
+      </div>
+    </div>
+  `;
+
+  startMaintenanceCountdown(status);
+
+  document.getElementById('save-maintenance-btn').addEventListener('click', async () => {
+    const errorEl = document.getElementById('maintenance-error');
+    errorEl.textContent = '';
+
+    const enabled = document.getElementById('maintenance-enabled').checked;
+    const message = document.getElementById('maintenance-message').value;
+    const startsRaw = document.getElementById('maintenance-starts').value;
+    const endsRaw = document.getElementById('maintenance-ends').value;
+
+    const payload = {
+      enabled,
+      message,
+      starts_at: startsRaw ? new Date(startsRaw).toISOString() : null,
+      ends_at: endsRaw ? new Date(endsRaw).toISOString() : null,
+    };
+
+    if (payload.starts_at && payload.ends_at && new Date(payload.starts_at) >= new Date(payload.ends_at)) {
+      errorEl.textContent = 'The end time must be after the start time.';
+      return;
+    }
+
+    try {
+      const updated = await api('/api/maintenance', { method: 'PUT', body: JSON.stringify(payload) });
+      toast(enabled ? 'Maintenance mode saved.' : 'Maintenance mode turned off.');
+      renderMaintenance(updated);
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  });
+}
+
+function startMaintenanceCountdown(status) {
+  const el = document.getElementById('maintenance-countdown');
+  if (!el) return;
+
+  // Anchor the countdown to server time (not the browser's clock) so it
+  // stays accurate even if the visitor's system clock is off.
+  const skewMs = Date.now() - new Date(status.server_time).getTime();
+
+  function tick() {
+    const now = Date.now() - skewMs;
+    if (status.active && status.ends_at) {
+      const diff = new Date(status.ends_at).getTime() - now;
+      el.textContent = diff > 0 ? `Back online in ${formatCountdown(diff)}` : 'Ending…';
+      if (diff <= 0) { clearInterval(maintenanceCountdownTimer); loadMaintenance(); }
+    } else if (status.scheduled && status.starts_at) {
+      const diff = new Date(status.starts_at).getTime() - now;
+      el.textContent = diff > 0 ? `Starts in ${formatCountdown(diff)}` : 'Starting…';
+      if (diff <= 0) { clearInterval(maintenanceCountdownTimer); loadMaintenance(); }
+    } else {
+      el.textContent = '';
+    }
+  }
+
+  tick();
+  maintenanceCountdownTimer = setInterval(tick, 1000);
+}
+
+function formatCountdown(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  if (days > 0) return `${days}d ${pad(hours)}h ${pad(minutes)}m`;
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 }
 
 boot();
