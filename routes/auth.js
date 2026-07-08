@@ -5,7 +5,6 @@ const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { createResetToken, verifyResetToken, consumeResetToken } = require('../lib/passwordReset');
 const { sendPasswordResetEmail } = require('../lib/email');
-const { logManual } = require('../lib/auditLog');
 
 const router = express.Router();
 
@@ -31,7 +30,6 @@ router.post('/login', (req, res) => {
   const admin = db.prepare('SELECT * FROM admins WHERE username = ?').get(username);
 
   if (!admin || !bcrypt.compareSync(password, admin.password_hash)) {
-    logManual({ action: `Failed sign-in attempt for "${username}"`, req });
     return res.status(401).json({ error: 'Incorrect username or password.' });
   }
 
@@ -40,28 +38,11 @@ router.post('/login', (req, res) => {
   });
 
   res.cookie('admin_token', token, cookieOptions);
-  logManual({ adminId: admin.id, adminUsername: admin.username, action: 'Signed in', req });
   res.json({ username: admin.username });
 });
 
 router.post('/logout', (req, res) => {
-  // No requireAdmin on this route (you should always be able to sign out
-  // even with an expired token), so identify who's leaving by hand — best
-  // effort, since an already-invalid token just means we log without a name.
-  const token = req.cookies && req.cookies.admin_token;
-  let outgoing = null;
-  if (token) {
-    try {
-      outgoing = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (err) {
-      // expired/invalid — nothing to attribute the log entry to
-    }
-  }
-
   res.clearCookie('admin_token', { httpOnly: true, secure: isProd, sameSite: 'lax' });
-  if (outgoing) {
-    logManual({ adminId: outgoing.id, adminUsername: outgoing.username, action: 'Signed out', req });
-  }
   res.json({ ok: true });
 });
 
@@ -110,14 +91,6 @@ router.post('/reset-password', (req, res) => {
   const passwordHash = bcrypt.hashSync(password, 12);
   db.prepare('UPDATE admins SET password_hash = ? WHERE id = ?').run(passwordHash, verified.accountId);
   consumeResetToken(verified.tokenHash);
-
-  const resetAdmin = db.prepare('SELECT username FROM admins WHERE id = ?').get(verified.accountId);
-  logManual({
-    adminId: verified.accountId,
-    adminUsername: resetAdmin ? resetAdmin.username : '',
-    action: 'Reset password via emailed link',
-    req,
-  });
 
   res.json({ ok: true });
 });
