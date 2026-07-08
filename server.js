@@ -91,13 +91,25 @@ app.use((req, res, next) => {
 });
 
 // --- Maintenance mode gate ---
-// Applies only to /api/* (the admin panel's static files under /admin and
-// /widgets always keep loading — the panel itself needs to stay reachable
-// so an admin can turn maintenance mode back off). Signed-in admins bypass
-// entirely so they retain full use of the portal while it's on. A short
-// allowlist of public endpoints also always stays reachable: health checks,
-// the maintenance status endpoint itself (so the site can show a countdown),
-// and the admin auth endpoints (so a signed-out admin can still log back in).
+// Applies to /api/* AND /widgets/* — the embedded widgets are the public
+// site's actual content (birds grid, blog, events, forms, etc.), so blocking
+// them is what makes the live site go dark for a normal visitor. The admin
+// panel's static files under /admin always keep loading regardless, since
+// the panel itself needs to stay reachable so an admin can turn maintenance
+// mode back off. Signed-in admins bypass this gate entirely everywhere else
+// too, so they retain full use of both the API and the widgets while it's on.
+//
+// Two files are deliberately exempted even though they live under /widgets:
+// shared.js and widgets.css. shared.js is the script responsible for
+// detecting maintenance mode and covering the page with a full-screen block
+// message in the first place — if we blocked it too, no visitor would ever
+// see *why* the site went dark, they'd just see broken widgets. widgets.css
+// supplies the styling that overlay uses.
+//
+// A short allowlist of public API endpoints also always stays reachable:
+// health checks, the maintenance status endpoint itself (so shared.js can
+// poll it and render the block/countdown), and the admin auth endpoints (so
+// a signed-out admin can still log back in to turn maintenance mode off).
 const MAINTENANCE_ALLOWLIST = new Set([
   '/api/health',
   '/api/maintenance/status',
@@ -106,10 +118,13 @@ const MAINTENANCE_ALLOWLIST = new Set([
   '/api/auth/me',
   '/api/auth/forgot-password',
   '/api/auth/reset-password',
+  '/widgets/shared.js',
+  '/widgets/widgets.css',
 ]);
 
 app.use((req, res, next) => {
-  if (!req.path.startsWith('/api')) return next();
+  const isGated = req.path.startsWith('/api') || req.path.startsWith('/widgets');
+  if (!isGated) return next(); // /admin (and anything else) always loads
   if (req.admin) return next(); // signed-in admins are never blocked
   if (MAINTENANCE_ALLOWLIST.has(req.path)) return next();
 
@@ -119,6 +134,15 @@ app.use((req, res, next) => {
   if (status.ends_at) {
     const secondsLeft = Math.max(0, Math.round((new Date(status.ends_at) - new Date()) / 1000));
     res.setHeader('Retry-After', String(secondsLeft));
+  }
+
+  // /widgets/* requests are loaded via <script src> / <link> tags, not read
+  // as JSON — dumping a JSON body into those would just show up as a
+  // harmless-but-messy console error (bad JS syntax / bad CSS). Send an
+  // empty body instead; shared.js is the one that actually informs the
+  // visitor, via the maintenance-status endpoint it's still allowed to poll.
+  if (req.path.startsWith('/widgets')) {
+    return res.status(503).end();
   }
 
   return res.status(503).json({
