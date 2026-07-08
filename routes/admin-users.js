@@ -6,18 +6,21 @@ const { requireAdmin } = require('../middleware/auth');
 const router = express.Router();
 
 router.get('/', requireAdmin, (req, res) => {
-  const admins = db.prepare('SELECT id, username, created_at FROM admins ORDER BY created_at ASC').all();
+  const admins = db.prepare('SELECT id, username, email, created_at FROM admins ORDER BY created_at ASC').all();
   res.json(admins);
 });
 
 router.post('/', requireAdmin, (req, res) => {
-  const { username, password } = req.body || {};
+  const { username, password, email } = req.body || {};
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required.' });
   }
   if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'That email address doesn\'t look valid.' });
   }
 
   const existing = db.prepare('SELECT id FROM admins WHERE username = ?').get(username);
@@ -26,8 +29,10 @@ router.post('/', requireAdmin, (req, res) => {
   }
 
   const passwordHash = bcrypt.hashSync(password, 12);
-  const result = db.prepare('INSERT INTO admins (username, password_hash) VALUES (?, ?)').run(username, passwordHash);
-  const created = db.prepare('SELECT id, username, created_at FROM admins WHERE id = ?').get(result.lastInsertRowid);
+  const result = db
+    .prepare('INSERT INTO admins (username, password_hash, email) VALUES (?, ?, ?)')
+    .run(username, passwordHash, (email || '').trim());
+  const created = db.prepare('SELECT id, username, email, created_at FROM admins WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(created);
 });
 
@@ -36,7 +41,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
   const admin = db.prepare('SELECT * FROM admins WHERE id = ?').get(req.params.id);
   if (!admin) return res.status(404).json({ error: 'Admin not found.' });
 
-  const { username, password } = req.body || {};
+  const { username, password, email } = req.body || {};
   const updates = {};
 
   if (username !== undefined) {
@@ -45,6 +50,13 @@ router.patch('/:id', requireAdmin, (req, res) => {
     const existing = db.prepare('SELECT id FROM admins WHERE username = ? AND id != ?').get(trimmed, req.params.id);
     if (existing) return res.status(409).json({ error: 'That username is already taken.' });
     updates.username = trimmed;
+  }
+
+  if (email !== undefined) {
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'That email address doesn\'t look valid.' });
+    }
+    updates.email = email.trim();
   }
 
   if (password !== undefined && password !== '') {
@@ -62,7 +74,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
     db.prepare(`UPDATE admins SET ${setClause} WHERE id = @id`).run({ ...updates, id: req.params.id });
   }
 
-  const updated = db.prepare('SELECT id, username, created_at FROM admins WHERE id = ?').get(req.params.id);
+  const updated = db.prepare('SELECT id, username, email, created_at FROM admins WHERE id = ?').get(req.params.id);
   res.json(updated);
 });
 

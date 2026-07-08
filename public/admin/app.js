@@ -20,6 +20,39 @@ const TAB_TITLES = {
   admins: 'Admin access',
 };
 
+// Friendly labels for the free-form JSON fields stored in applications.data,
+// across all three form types (adoption/relinquishment/volunteer share some
+// field names, like fullName/email/phone). Anything submitted that isn't in
+// this map still displays fine — humanizeFieldName() turns camelCase into
+// Title Case as a fallback, so new form fields never show up unlabeled.
+const APPLICATION_FIELD_LABELS = {
+  fullName: 'Full Name',
+  email: 'Email',
+  phone: 'Phone',
+  address: 'Home Address',
+  whichBird: 'Bird of Interest',
+  homeType: 'Home Type',
+  birdExperience: 'Prior Bird Experience',
+  aboutHousehold: 'Household',
+  birdSpecies: 'Species',
+  birdAge: 'Age',
+  birdHealth: 'Health',
+  reasonForRelinquishment: 'Reason',
+  interests: 'Interests',
+  availability: 'Availability',
+  experience: 'Experience',
+};
+
+function humanizeFieldName(key) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+function applicationFieldLabel(key) {
+  return APPLICATION_FIELD_LABELS[key] || humanizeFieldName(key);
+}
+
 let currentTab = 'adoption';
 
 // ---------- helpers ----------
@@ -211,7 +244,7 @@ function renderApplicationsTable(apps) {
 async function openApplicationModal(id) {
   const app = await api(`/api/applications/${id}`);
   const fields = Object.entries(app.data)
-    .map(([key, value]) => `<div style="margin-bottom:0.5rem;"><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</div>`)
+    .map(([key, value]) => `<div style="margin-bottom:0.5rem;"><strong>${escapeHtml(applicationFieldLabel(key))}:</strong> ${escapeHtml(value)}</div>`)
     .join('');
 
   document.getElementById('modal-root').innerHTML = `

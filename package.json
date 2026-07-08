@@ -4,6 +4,9 @@
   "description": "Backend + admin portal for Heart & Soul Parrot Rescue: adoption/relinquishment/volunteer applications and event management with RSVP.",
   "main": "server.js",
   "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
     "seed-admin": "node scripts/create-admin.js"

@@ -25,16 +25,45 @@
         <div class="error-text" id="error-text"></div>
 
         <button type="submit" class="btn-primary" style="width:100%; margin-top:0.75rem;">Sign in</button>
+        <button type="button" id="show-forgot" style="background:none; border:none; color:var(--muted); font-size:0.85rem; margin-top:0.75rem; cursor:pointer; text-decoration:underline;">
+          Forgot password?
+        </button>
+      </form>
+
+      <form id="forgot-form" style="display:none;">
+        <p style="color:var(--muted); font-size:0.85rem; margin-top:0;">Enter your username and we'll email you a reset link, if the account has an email on file.</p>
+        <label for="forgot-username">Username</label>
+        <input id="forgot-username" name="username" autocomplete="username" required />
+
+        <div class="error-text" id="forgot-error-text"></div>
+        <div id="forgot-success-text" style="color:var(--muted); font-size:0.85rem; margin-top:0.5rem;"></div>
+
+        <button type="submit" class="btn-primary" style="width:100%; margin-top:0.75rem;">Send reset link</button>
+        <button type="button" id="show-login" style="background:none; border:none; color:var(--muted); font-size:0.85rem; margin-top:0.75rem; cursor:pointer; text-decoration:underline;">
+          Back to sign in
+        </button>
       </form>
     </div>
   </div>
 
   <script>
     const API_BASE = window.location.origin;
-    const form = document.getElementById('login-form');
+    const loginForm = document.getElementById('login-form');
+    const forgotForm = document.getElementById('forgot-form');
     const errorText = document.getElementById('error-text');
+    const forgotErrorText = document.getElementById('forgot-error-text');
+    const forgotSuccessText = document.getElementById('forgot-success-text');
 
-    form.addEventListener('submit', async (e) => {
+    document.getElementById('show-forgot').addEventListener('click', () => {
+      loginForm.style.display = 'none';
+      forgotForm.style.display = 'block';
+    });
+    document.getElementById('show-login').addEventListener('click', () => {
+      forgotForm.style.display = 'none';
+      loginForm.style.display = 'block';
+    });
+
+    loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorText.textContent = '';
       const username = document.getElementById('username').value.trim();
@@ -55,6 +84,29 @@
         window.location.href = './index.html';
       } catch (err) {
         errorText.textContent = 'Could not reach the server. Try again shortly.';
+      }
+    });
+
+    forgotForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      forgotErrorText.textContent = '';
+      forgotSuccessText.textContent = '';
+      const username = document.getElementById('forgot-username').value.trim();
+
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          forgotErrorText.textContent = data.error || 'Something went wrong.';
+          return;
+        }
+        forgotSuccessText.textContent = data.message || 'If that account exists, a reset link has been sent.';
+      } catch (err) {
+        forgotErrorText.textContent = 'Could not reach the server. Try again shortly.';
       }
     });
   </script>

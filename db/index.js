@@ -118,6 +118,21 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at);
   CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id);
   CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
+
+  -- One-time tokens for the "forgot password" flow. Shared by both admin
+  -- accounts and blog users (account_type distinguishes them), so a token
+  -- minted for one can never be used to reset the other.
+  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_type TEXT NOT NULL CHECK (account_type IN ('admin', 'user')),
+    account_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_reset_tokens_lookup ON password_reset_tokens(token_hash, expires_at);
 `);
 
 function addColumnIfMissing(table, columnDef) {
@@ -131,6 +146,8 @@ function addColumnIfMissing(table, columnDef) {
 addColumnIfMissing('announcements', "image_url TEXT DEFAULT ''");
 addColumnIfMissing('users', "avatar_url TEXT DEFAULT ''");
 addColumnIfMissing('users', "role TEXT DEFAULT ''");
+addColumnIfMissing('users', "email TEXT DEFAULT ''");
+addColumnIfMissing('admins', "email TEXT DEFAULT ''");
 
 try {
   db.exec(`UPDATE users SET username = LOWER(username) WHERE username != LOWER(username)`);

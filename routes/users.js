@@ -3,8 +3,14 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { requireUser, requireAdmin } = require('../middleware/auth');
+const { createResetToken, verifyResetToken, consumeResetToken } = require('../lib/passwordReset');
+const { sendPasswordResetEmail } = require('../lib/email');
 
 const router = express.Router();
+
+// Where the blog/front-end lives, so reset links point to a real page there
+// (e.g. https://heartandsoulparrotrescue.com/reset-password).
+const SITE_BASE_URL = process.env.SITE_BASE_URL || '';
 
 const userCookieOptions = {
   httpOnly: true,
@@ -20,11 +26,12 @@ function publicUser(user) {
     display_name: user.display_name,
     avatar_url: user.avatar_url || '',
     role: user.role || '',
+    email: user.email || '',
   };
 }
 
 router.post('/signup', (req, res) => {
-  const { password, display_name } = req.body || {};
+  const { password, display_name, email } = req.body || {};
   const username = (req.body && req.body.username || '').toLowerCase();
 
   if (!username || !password || !display_name) {
@@ -36,6 +43,12 @@ router.post('/signup', (req, res) => {
   if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   }
+  // Email is optional at signup (existing accounts won't have one either),
+  // but if it's provided, make sure it's at least plausible — without an
+  // email on file the account simply can't use "forgot password" later.
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'That email address doesn\'t look valid.' });
+  }
 
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
   if (existing) {
@@ -44,8 +57,8 @@ router.post('/signup', (req, res) => {
 
   const passwordHash = bcrypt.hashSync(password, 12);
   const result = db
-    .prepare('INSERT INTO users (username, display_name, password_hash) VALUES (?, ?, ?)')
-    .run(username, display_name, passwordHash);
+    .prepare('INSERT INTO users (username, display_name, password_hash, email) VALUES (?, ?, ?, ?)')
+    .run(username, display_name, passwordHash, (email || '').trim());
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
   const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -84,7 +97,7 @@ router.get('/me', requireUser, (req, res) => {
 });
 
 router.patch('/me', requireUser, (req, res) => {
-  const { display_name, avatar_url } = req.body || {};
+  const { display_name, avatar_url, email } = req.body || {};
   const updates = {};
 
   if (display_name !== undefined) {
@@ -93,6 +106,12 @@ router.patch('/me', requireUser, (req, res) => {
   }
   if (avatar_url !== undefined) {
     updates.avatar_url = avatar_url.trim();
+  }
+  if (email !== undefined) {
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'That email address doesn\'t look valid.' });
+    }
+    updates.email = email.trim();
   }
 
   const setClause = Object.keys(updates)
@@ -105,6 +124,50 @@ router.patch('/me', requireUser, (req, res) => {
 
   const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   res.json(publicUser(updated));
+});
+
+// --- Forgot / reset password (blog accounts) ---
+
+router.post('/forgot-password', async (req, res) => {
+  const { username } = req.body || {};
+
+  // Same generic response regardless of outcome, so this can't be used to
+  // enumerate valid usernames.
+  const genericResponse = { ok: true, message: 'If that account exists, a reset link has been sent.' };
+
+  if (!username) return res.json(genericResponse);
+
+  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.toLowerCase());
+  if (!user || !user.email) return res.json(genericResponse);
+
+  const rawToken = createResetToken('user', user.id);
+  const resetUrl = `${SITE_BASE_URL}/reset-password?token=${rawToken}`;
+
+  await sendPasswordResetEmail({ to: user.email, resetUrl, accountLabel: 'blog' });
+
+  res.json(genericResponse);
+});
+
+router.post('/reset-password', (req, res) => {
+  const { token, password } = req.body || {};
+
+  if (!token || !password) {
+    return res.status(400).json({ error: 'Token and new password are required.' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+
+  const verified = verifyResetToken(token);
+  if (!verified || verified.accountType !== 'user') {
+    return res.status(400).json({ error: 'This reset link is invalid or has expired.' });
+  }
+
+  const passwordHash = bcrypt.hashSync(password, 12);
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, verified.accountId);
+  consumeResetToken(verified.tokenHash);
+
+  res.json({ ok: true });
 });
 
 router.get('/', requireAdmin, (req, res) => {

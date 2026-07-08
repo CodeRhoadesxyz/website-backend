@@ -1,8 +1,26 @@
 const express = require('express');
 const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
+const { sendNewApplicationNotification } = require('../lib/email');
 
 const router = express.Router();
+
+// Comma-separated list of addresses to notify on every new application.
+// Falls back to every admin's email on file if not set.
+const NOTIFICATION_EMAILS = (process.env.APPLICATION_NOTIFICATION_EMAILS || '')
+  .split(',')
+  .map((e) => e.trim())
+  .filter(Boolean);
+
+const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || '';
+
+function getNotificationRecipients() {
+  if (NOTIFICATION_EMAILS.length > 0) return NOTIFICATION_EMAILS;
+  return db
+    .prepare(`SELECT email FROM admins WHERE email IS NOT NULL AND email != ''`)
+    .all()
+    .map((row) => row.email);
+}
 
 const VALID_TYPES = ['adoption', 'relinquishment', 'volunteer'];
 const VALID_STATUSES = ['new', 'in_review', 'approved', 'declined', 'archived'];
@@ -36,7 +54,21 @@ router.post('/:type', (req, res) => {
   const stmt = db.prepare('INSERT INTO applications (type, data) VALUES (?, ?)');
   const result = stmt.run(type, JSON.stringify(body));
 
+  // Respond to the applicant immediately — don't make them wait on an email
+  // round-trip. The notification is fire-and-forget; if it fails, it's
+  // logged in lib/email.js but doesn't affect the application being saved.
   res.status(201).json({ id: result.lastInsertRowid, message: 'Application received.' });
+
+  const recipients = getNotificationRecipients();
+  if (recipients.length > 0) {
+    sendNewApplicationNotification({
+      to: recipients,
+      type,
+      applicantName: body.fullName || 'Someone',
+      applicationId: result.lastInsertRowid,
+      adminUrl: `${ADMIN_BASE_URL}/admin/index.html`,
+    }).catch((err) => console.error('[applications] notification email failed:', err));
+  }
 });
 
 router.get('/', requireAdmin, (req, res) => {
