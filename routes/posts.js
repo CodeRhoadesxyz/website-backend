@@ -9,12 +9,11 @@ function excerpt(body, len = 220) {
   return clean.length > len ? clean.slice(0, len).trim() + '…' : clean;
 }
 
-// --- Public: list posts, newest first ---
 router.get('/', (req, res) => {
   const rows = db
     .prepare(
       `SELECT p.id, p.title, p.body, p.created_at, p.user_id,
-              u.display_name as author_name, u.avatar_url as author_avatar,
+              u.display_name as author_name, u.avatar_url as author_avatar, u.role as author_role,
               (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
        FROM posts p JOIN users u ON u.id = p.user_id
        ORDER BY p.created_at DESC`
@@ -25,11 +24,10 @@ router.get('/', (req, res) => {
   res.json(withExcerpt);
 });
 
-// --- Public: single post with its comments ---
 router.get('/:id', (req, res) => {
   const post = db
     .prepare(
-      `SELECT p.*, u.display_name as author_name, u.avatar_url as author_avatar
+      `SELECT p.*, u.display_name as author_name, u.avatar_url as author_avatar, u.role as author_role
        FROM posts p JOIN users u ON u.id = p.user_id
        WHERE p.id = ?`
     )
@@ -39,7 +37,7 @@ router.get('/:id', (req, res) => {
 
   const comments = db
     .prepare(
-      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name as author_name, u.avatar_url as author_avatar
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name as author_name, u.avatar_url as author_avatar, u.role as author_role
        FROM comments c JOIN users u ON u.id = c.user_id
        WHERE c.post_id = ? ORDER BY c.created_at ASC`
     )
@@ -48,7 +46,6 @@ router.get('/:id', (req, res) => {
   res.json({ ...post, comments });
 });
 
-// --- Any signed-up user: create a post ---
 router.post('/', requireUser, (req, res) => {
   const { title, body } = req.body || {};
   if (!title || !body) {
@@ -61,13 +58,12 @@ router.post('/', requireUser, (req, res) => {
 
   const created = db
     .prepare(
-      `SELECT p.*, u.display_name as author_name, u.avatar_url as author_avatar FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?`
+      `SELECT p.*, u.display_name as author_name, u.avatar_url as author_avatar, u.role as author_role FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?`
     )
     .get(result.lastInsertRowid);
   res.status(201).json({ ...created, comments: [] });
 });
 
-// --- Owner only: edit their own post ---
 router.patch('/:id', requireUser, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
   if (!post) return res.status(404).json({ error: 'Post not found.' });
@@ -81,12 +77,11 @@ router.patch('/:id', requireUser, (req, res) => {
   ).run(title || null, body || null, req.params.id);
 
   const updated = db
-    .prepare(`SELECT p.*, u.display_name as author_name, u.avatar_url as author_avatar FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?`)
+    .prepare(`SELECT p.*, u.display_name as author_name, u.avatar_url as author_avatar, u.role as author_role FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?`)
     .get(req.params.id);
   res.json(updated);
 });
 
-// --- Owner OR admin: delete a post ---
 router.delete('/:id', attachIdentity, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
   if (!post) return res.status(404).json({ error: 'Post not found.' });
@@ -100,7 +95,6 @@ router.delete('/:id', attachIdentity, (req, res) => {
   res.json({ ok: true });
 });
 
-// --- Any signed-up user: comment on a post ---
 router.post('/:id/comments', requireUser, (req, res) => {
   const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(req.params.id);
   if (!post) return res.status(404).json({ error: 'Post not found.' });
@@ -116,7 +110,7 @@ router.post('/:id/comments', requireUser, (req, res) => {
 
   const created = db
     .prepare(
-      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name as author_name, u.avatar_url as author_avatar
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name as author_name, u.avatar_url as author_avatar, u.role as author_role
        FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?`
     )
     .get(result.lastInsertRowid);

@@ -24,6 +24,12 @@
 
   // Renders a small round avatar image, or a circle with the person's first
   // initial if they haven't set a profile picture.
+  // Renders a small badge (e.g. "Founder") next to a name, or nothing if no
+  // role is set — admin-assigned only, from the Community tab.
+  function roleBadgeHtml(role) {
+    return role ? `<span class="rw-blog-role-badge">${escapeHtml(role)}</span>` : '';
+  }
+
   function avatarHtml(name, url, size) {
     if (url) {
       return `<img class="rw-blog-avatar" style="width:${size}px;height:${size}px;" src="${escapeHtml(url)}" alt="" />`;
@@ -80,7 +86,7 @@
         <div class="rw-blog-authbar">
           <span style="display:flex; align-items:center; gap:0.5rem;">
             ${avatarHtml(currentUser.display_name, currentUser.avatar_url, 28)}
-            Signed in as <strong>${escapeHtml(currentUser.display_name)}</strong>
+            Signed in as <strong>${escapeHtml(currentUser.display_name)}</strong>${roleBadgeHtml(currentUser.role)}
           </span>
           <div>
             <button class="rw-blog-link-btn" id="rw-new-post-btn">+ New post</button>
@@ -277,7 +283,7 @@
           <a class="rw-blog-post-title" href="#post-${p.id}">${escapeHtml(p.title)}</a>
           <div class="rw-blog-post-meta" style="display:flex; align-items:center; gap:0.4rem;">
             ${avatarHtml(p.author_name, p.author_avatar, 20)}
-            ${escapeHtml(p.author_name)} · ${fmtDate(p.created_at)} · ${p.comment_count} comment${p.comment_count === 1 ? '' : 's'}
+            ${escapeHtml(p.author_name)}${roleBadgeHtml(p.author_role)} · ${fmtDate(p.created_at)} · ${p.comment_count} comment${p.comment_count === 1 ? '' : 's'}
           </div>
           <p class="rw-blog-post-excerpt">${escapeHtml(p.excerpt)}</p>
           <a class="rw-blog-readmore" href="#post-${p.id}">Read more →</a>
@@ -309,7 +315,7 @@
       <h3 class="rw-blog-post-title-full">${escapeHtml(post.title)}</h3>
       <div class="rw-blog-post-meta" style="display:flex; align-items:center; gap:0.4rem;">
         ${avatarHtml(post.author_name, post.author_avatar, 22)}
-        ${escapeHtml(post.author_name)} · ${fmtDate(post.created_at)}
+        ${escapeHtml(post.author_name)}${roleBadgeHtml(post.author_role)} · ${fmtDate(post.created_at)}
       </div>
       <div class="rw-blog-post-body">${escapeHtml(post.body)}</div>
       ${isOwner ? `<button class="rw-blog-link-btn rw-blog-danger" id="rw-delete-post">Delete this post</button>` : ''}
@@ -320,7 +326,7 @@
           <div class="rw-blog-comment">
             <div class="rw-blog-comment-meta" style="display:flex; align-items:center; gap:0.4rem;">
               ${avatarHtml(c.author_name, c.author_avatar, 18)}
-              <strong>${escapeHtml(c.author_name)}</strong> · ${fmtDate(c.created_at)}
+              <strong>${escapeHtml(c.author_name)}</strong>${roleBadgeHtml(c.author_role)} · ${fmtDate(c.created_at)}
             </div>
             <div>${escapeHtml(c.body)}</div>
             ${currentUser && currentUser.id === c.user_id ? `<button class="rw-blog-link-btn rw-blog-danger" data-delete-comment="${c.id}">Delete</button>` : ''}

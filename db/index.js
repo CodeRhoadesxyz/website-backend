@@ -87,6 +87,7 @@ db.exec(`
     display_name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     avatar_url TEXT DEFAULT '',
+    role TEXT DEFAULT '',
     is_banned INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -119,11 +120,6 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 `);
 
-// --- Migrations for columns added after initial release ---
-// CREATE TABLE IF NOT EXISTS above only applies to brand-new databases; a
-// database that already has these tables from an earlier deploy needs the
-// new column added explicitly. SQLite throws if the column already exists,
-// so each is wrapped individually and that specific error is ignored.
 function addColumnIfMissing(table, columnDef) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`);
@@ -134,16 +130,11 @@ function addColumnIfMissing(table, columnDef) {
 
 addColumnIfMissing('announcements', "image_url TEXT DEFAULT ''");
 addColumnIfMissing('users', "avatar_url TEXT DEFAULT ''");
+addColumnIfMissing('users', "role TEXT DEFAULT ''");
 
-// One-time fix for accounts created before usernames were normalized to
-// lowercase at signup/login — without this, an existing account's stored
-// casing would never match a lowercased login attempt.
 try {
   db.exec(`UPDATE users SET username = LOWER(username) WHERE username != LOWER(username)`);
 } catch (err) {
-  // Only possible if two existing accounts differ solely by case (e.g. both
-  // "Dalton" and "dalton" already exist) — extremely unlikely, but don't
-  // crash startup over it if it happens.
   console.error('Username lowercase migration skipped:', err.message);
 }
 

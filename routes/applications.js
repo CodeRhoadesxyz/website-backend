@@ -7,8 +7,6 @@ const router = express.Router();
 const VALID_TYPES = ['adoption', 'relinquishment', 'volunteer'];
 const VALID_STATUSES = ['new', 'in_review', 'approved', 'declined', 'archived'];
 
-// Minimal required fields per form type, so a broken/empty submission never
-// silently lands in the admin queue.
 const REQUIRED_FIELDS = {
   adoption: ['fullName', 'email', 'phone'],
   relinquishment: ['fullName', 'email', 'phone', 'birdSpecies'],
@@ -21,7 +19,6 @@ function validateBody(type, body) {
   return missing;
 }
 
-// --- Public: submit an application ---
 router.post('/:type', (req, res) => {
   const { type } = req.params;
 
@@ -42,7 +39,6 @@ router.post('/:type', (req, res) => {
   res.status(201).json({ id: result.lastInsertRowid, message: 'Application received.' });
 });
 
-// --- Admin: list applications, optionally filtered ---
 router.get('/', requireAdmin, (req, res) => {
   const { type, status } = req.query;
 
@@ -69,14 +65,12 @@ router.get('/', requireAdmin, (req, res) => {
   res.json(applications);
 });
 
-// --- Admin: get a single application ---
 router.get('/:id', requireAdmin, (req, res) => {
   const row = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Application not found.' });
   res.json({ ...row, data: JSON.parse(row.data) });
 });
 
-// --- Admin: update status/notes ---
 router.patch('/:id', requireAdmin, (req, res) => {
   const { status, admin_notes } = req.body || {};
   const row = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
@@ -98,7 +92,6 @@ router.patch('/:id', requireAdmin, (req, res) => {
   res.json({ ...updated, data: JSON.parse(updated.data) });
 });
 
-// --- Admin: delete an application ---
 router.delete('/:id', requireAdmin, (req, res) => {
   const result = db.prepare('DELETE FROM applications WHERE id = ?').run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Application not found.' });

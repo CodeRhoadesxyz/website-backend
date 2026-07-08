@@ -4,7 +4,6 @@ const { attachIdentity } = require('../middleware/auth');
 
 const router = express.Router();
 
-// --- Owner OR admin: delete a comment ---
 router.delete('/:id', attachIdentity, (req, res) => {
   const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(req.params.id);
   if (!comment) return res.status(404).json({ error: 'Comment not found.' });

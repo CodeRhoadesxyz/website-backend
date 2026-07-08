@@ -41,7 +41,7 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/me', requireAdmin, (req, res) => {
-  res.json({ username: req.admin.username });
+  res.json({ id: req.admin.id, username: req.admin.username });
 });
 
 module.exports = router;

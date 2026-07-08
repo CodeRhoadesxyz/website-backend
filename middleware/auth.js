@@ -29,12 +29,10 @@ function requireUser(req, res, next) {
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    // Re-check ban status on every request (not just at login) so a ban
-    // takes effect immediately instead of waiting for the token to expire.
-    const user = db.prepare('SELECT id, username, display_name, avatar_url, is_banned FROM users WHERE id = ?').get(payload.id);
+    const user = db.prepare('SELECT id, username, display_name, avatar_url, role, is_banned FROM users WHERE id = ?').get(payload.id);
     if (!user) return res.status(401).json({ error: 'Account no longer exists.' });
     if (user.is_banned) return res.status(403).json({ error: 'This account has been suspended.' });
-    req.user = { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url };
+    req.user = { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url, role: user.role };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Session expired. Please sign in again.' });
@@ -43,9 +41,7 @@ function requireUser(req, res, next) {
 
 // Non-blocking version of the above two: populates req.user / req.admin if
 // either cookie is present and valid, but never rejects the request either
-// way. Used for actions like "delete this post" where the rule is "the
-// owner OR an admin can do this" — the route handler decides after seeing
-// whichever identity (if any) got attached.
+// way.
 function attachIdentity(req, res, next) {
   const userToken = req.cookies && req.cookies.user_token;
   const adminToken = req.cookies && req.cookies.admin_token;
@@ -53,9 +49,9 @@ function attachIdentity(req, res, next) {
   if (userToken) {
     try {
       const payload = jwt.verify(userToken, process.env.JWT_SECRET);
-      const user = db.prepare('SELECT id, username, display_name, avatar_url, is_banned FROM users WHERE id = ?').get(payload.id);
+      const user = db.prepare('SELECT id, username, display_name, avatar_url, role, is_banned FROM users WHERE id = ?').get(payload.id);
       if (user && !user.is_banned) {
-        req.user = { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url };
+        req.user = { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url, role: user.role };
       }
     } catch (err) {
       // invalid/expired — just leave req.user unset

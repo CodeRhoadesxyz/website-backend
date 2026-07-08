@@ -17,6 +17,7 @@ const TAB_TITLES = {
   announcements: 'News announcements',
   birds: 'Adoptable birds',
   community: 'Community',
+  admins: 'Admin access',
 };
 
 let currentTab = 'adoption';
@@ -78,9 +79,12 @@ function escapeHtml(str) {
 
 // ---------- boot ----------
 
+let currentAdminId = null;
+
 async function boot() {
   try {
     const me = await api('/api/auth/me');
+    currentAdminId = me.id;
     document.getElementById('signed-in-as').textContent = `Signed in as ${me.username}`;
   } catch (e) {
     return; // api() already redirected
@@ -109,6 +113,7 @@ function switchTab(tab) {
   const announcementsView = document.getElementById('announcements-view');
   const birdsView = document.getElementById('birds-view');
   const communityView = document.getElementById('community-view');
+  const adminsView = document.getElementById('admins-view');
 
   homeView.style.display = 'none';
   appView.style.display = 'none';
@@ -116,6 +121,7 @@ function switchTab(tab) {
   announcementsView.style.display = 'none';
   birdsView.style.display = 'none';
   communityView.style.display = 'none';
+  adminsView.style.display = 'none';
 
   if (tab === 'home') {
     homeView.style.display = 'block';
@@ -132,6 +138,9 @@ function switchTab(tab) {
   } else if (tab === 'community') {
     communityView.style.display = 'block';
     loadCommunity();
+  } else if (tab === 'admins') {
+    adminsView.style.display = 'block';
+    loadAdmins();
   } else {
     appView.style.display = 'block';
     loadApplications(tab);
@@ -861,14 +870,25 @@ function renderCommunityUsers(users) {
     return;
   }
   wrap.innerHTML = `
+    <datalist id="role-suggestions">
+      <option value="Founder">
+      <option value="Vice President">
+      <option value="Website Developer">
+    </datalist>
     <table>
-      <thead><tr><th>Joined</th><th>Name</th><th>Username</th><th>Posts</th><th>Comments</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Joined</th><th>Name</th><th>Username</th><th>Role</th><th>Posts</th><th>Comments</th><th>Status</th><th></th></tr></thead>
       <tbody>
         ${users.map((u) => `
           <tr>
             <td class="mono">${fmtDate(u.created_at)}</td>
             <td>${escapeHtml(u.display_name)}</td>
             <td class="mono">${escapeHtml(u.username)}</td>
+            <td>
+              <div style="display:flex; gap:0.3rem;">
+                <input list="role-suggestions" data-role-input="${u.id}" value="${escapeHtml(u.role || '')}" placeholder="e.g. Founder" style="min-width:130px;" />
+                <button class="btn-secondary" data-save-role="${u.id}" style="padding:0.4rem 0.7rem; font-size:0.82rem;">Set</button>
+              </div>
+            </td>
             <td>${u.post_count}</td>
             <td>${u.comment_count}</td>
             <td><span class="pill ${u.is_banned ? 'pill-declined' : 'pill-approved'}">${u.is_banned ? 'Suspended' : 'Active'}</span></td>
@@ -881,6 +901,19 @@ function renderCommunityUsers(users) {
       </tbody>
     </table>
   `;
+
+  wrap.querySelectorAll('[data-save-role]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.saveRole;
+      const input = wrap.querySelector(`[data-role-input="${id}"]`);
+      try {
+        await api(`/api/users/${id}`, { method: 'PATCH', body: JSON.stringify({ role: input.value.trim() }) });
+        toast('Role updated.');
+      } catch (err) {
+        alert(`Could not update role: ${err.message}`);
+      }
+    })
+  );
 
   wrap.querySelectorAll('[data-toggle-ban]').forEach((btn) =>
     btn.addEventListener('click', async () => {
@@ -948,6 +981,104 @@ function renderHomeStats(stats) {
   wrap.querySelectorAll('[data-goto]').forEach((card) =>
     card.addEventListener('click', () => switchTab(card.dataset.goto))
   );
+}
+
+// ---------- admin access ----------
+
+async function loadAdmins() {
+  const view = document.getElementById('admins-view');
+  view.innerHTML = `
+    <div style="margin-bottom:1rem;">
+      <button class="btn-primary" id="new-admin-btn">+ Add admin</button>
+    </div>
+    <div id="admins-table-wrap">Loading…</div>
+  `;
+  document.getElementById('new-admin-btn').addEventListener('click', openAddAdminModal);
+
+  try {
+    const admins = await api('/api/admin-users');
+    renderAdminsTable(admins);
+  } catch (e) {
+    document.getElementById('admins-table-wrap').innerHTML = `<div class="empty-state">Could not load admin accounts.</div>`;
+  }
+}
+
+function renderAdminsTable(admins) {
+  const wrap = document.getElementById('admins-table-wrap');
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Created</th><th>Username</th><th></th></tr></thead>
+      <tbody>
+        ${admins.map((a) => `
+          <tr>
+            <td class="mono">${fmtDate(a.created_at)}</td>
+            <td>${escapeHtml(a.username)}${a.id === currentAdminId ? ' <span class="pill pill-approved">You</span>' : ''}</td>
+            <td>${a.id === currentAdminId
+              ? `<span style="color:var(--muted); font-size:0.82rem;">Can't remove your own account</span>`
+              : `<button class="btn-danger" data-delete-admin="${a.id}" data-username="${escapeHtml(a.username)}">Remove</button>`}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <p style="color:var(--muted); font-size:0.82rem; margin-top:0.75rem;">
+      Anyone added here can sign in to this entire admin panel — applications, events, community moderation, everything. Only add people you trust with full access.
+    </p>
+  `;
+
+  wrap.querySelectorAll('[data-delete-admin]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Remove admin access for "${btn.dataset.username}"? They'll be signed out immediately.`)) return;
+      try {
+        await api(`/api/admin-users/${btn.dataset.deleteAdmin}`, { method: 'DELETE' });
+        toast('Admin removed.');
+        loadAdmins();
+      } catch (err) {
+        alert(`Could not remove: ${err.message}`);
+      }
+    })
+  );
+}
+
+function openAddAdminModal() {
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Add admin</h3>
+          <button class="btn-ghost" id="modal-close">✕</button>
+        </div>
+        <label>Username</label>
+        <input id="new-admin-username" />
+        <label>Password</label>
+        <input id="new-admin-password" type="password" placeholder="At least 8 characters" />
+        <div class="error-text" id="new-admin-error"></div>
+        <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
+          <button class="btn-primary" id="create-admin-btn">Add admin</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-backdrop') closeModal();
+  });
+
+  document.getElementById('create-admin-btn').addEventListener('click', async () => {
+    const username = document.getElementById('new-admin-username').value.trim();
+    const password = document.getElementById('new-admin-password').value;
+    const errorEl = document.getElementById('new-admin-error');
+    errorEl.textContent = '';
+
+    try {
+      await api('/api/admin-users', { method: 'POST', body: JSON.stringify({ username, password }) });
+      toast('Admin added.');
+      closeModal();
+      loadAdmins();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  });
 }
 
 boot();

@@ -6,14 +6,6 @@ const { requireUser, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-const isProd = process.env.NODE_ENV === 'production';
-
-// Separate cookie name AND SameSite setting from the admin cookie.
-// The admin panel runs same-origin (behind the Cloudflare Worker/PHP proxy),
-// so 'lax' works fine there. This cookie, though, is used by the blog widget
-// embedded directly on the main site's pages — a genuinely cross-site
-// request from the visitor's browser to the Railway backend — which requires
-// SameSite=None (and therefore Secure) for the browser to send/accept it.
 const userCookieOptions = {
   httpOnly: true,
   secure: true,
@@ -22,16 +14,17 @@ const userCookieOptions = {
 };
 
 function publicUser(user) {
-  return { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url || '' };
+  return {
+    id: user.id,
+    username: user.username,
+    display_name: user.display_name,
+    avatar_url: user.avatar_url || '',
+    role: user.role || '',
+  };
 }
 
-// --- Public: create an account ---
 router.post('/signup', (req, res) => {
   const { password, display_name } = req.body || {};
-  // Usernames are normalized to lowercase so login can never fail just
-  // because of a casing mismatch (e.g. signing up as "Dalton" but typing
-  // "dalton" later) — the display_name (shown on posts/comments) keeps
-  // whatever capitalization the person actually typed.
   const username = (req.body && req.body.username || '').toLowerCase();
 
   if (!username || !password || !display_name) {
@@ -60,7 +53,6 @@ router.post('/signup', (req, res) => {
   res.status(201).json(publicUser(user));
 });
 
-// --- Public: log in ---
 router.post('/login', (req, res) => {
   const { password } = req.body || {};
   const username = (req.body && req.body.username || '').toLowerCase();
@@ -91,7 +83,6 @@ router.get('/me', requireUser, (req, res) => {
   res.json(req.user);
 });
 
-// --- Edit your own profile (display name and/or profile picture URL) ---
 router.patch('/me', requireUser, (req, res) => {
   const { display_name, avatar_url } = req.body || {};
   const updates = {};
@@ -116,11 +107,10 @@ router.patch('/me', requireUser, (req, res) => {
   res.json(publicUser(updated));
 });
 
-// --- Admin: list all users (for moderation) ---
 router.get('/', requireAdmin, (req, res) => {
   const users = db
     .prepare(
-      `SELECT u.id, u.username, u.display_name, u.is_banned, u.created_at,
+      `SELECT u.id, u.username, u.display_name, u.role, u.is_banned, u.created_at,
               (SELECT COUNT(*) FROM posts WHERE user_id = u.id) as post_count,
               (SELECT COUNT(*) FROM comments WHERE user_id = u.id) as comment_count
        FROM users u ORDER BY u.created_at DESC`
@@ -129,7 +119,6 @@ router.get('/', requireAdmin, (req, res) => {
   res.json(users);
 });
 
-// --- Admin: ban/unban a user ---
 router.patch('/:id', requireAdmin, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -137,12 +126,16 @@ router.patch('/:id', requireAdmin, (req, res) => {
   if ('is_banned' in (req.body || {})) {
     db.prepare('UPDATE users SET is_banned = ? WHERE id = ?').run(req.body.is_banned ? 1 : 0, req.params.id);
   }
+  if ('role' in (req.body || {})) {
+    db.prepare('UPDATE users SET role = ? WHERE id = ?').run((req.body.role || '').trim(), req.params.id);
+  }
 
-  const updated = db.prepare('SELECT id, username, display_name, is_banned, created_at FROM users WHERE id = ?').get(req.params.id);
+  const updated = db
+    .prepare('SELECT id, username, display_name, role, is_banned, created_at FROM users WHERE id = ?')
+    .get(req.params.id);
   res.json(updated);
 });
 
-// --- Admin: delete a user entirely (their posts/comments cascade-delete too) ---
 router.delete('/:id', requireAdmin, (req, res) => {
   const result = db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
