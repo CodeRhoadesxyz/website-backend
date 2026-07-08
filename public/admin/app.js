@@ -1013,9 +1013,12 @@ function renderAdminsTable(admins) {
           <tr>
             <td class="mono">${fmtDate(a.created_at)}</td>
             <td>${escapeHtml(a.username)}${a.id === currentAdminId ? ' <span class="pill pill-approved">You</span>' : ''}</td>
-            <td>${a.id === currentAdminId
-              ? `<span style="color:var(--muted); font-size:0.82rem;">Can't remove your own account</span>`
-              : `<button class="btn-danger" data-delete-admin="${a.id}" data-username="${escapeHtml(a.username)}">Remove</button>`}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn-secondary" data-edit-admin="${a.id}" data-username="${escapeHtml(a.username)}" style="margin-right:0.4rem;">Edit</button>
+              ${a.id === currentAdminId
+                ? `<span style="color:var(--muted); font-size:0.82rem;">Can't remove your own account</span>`
+                : `<button class="btn-danger" data-delete-admin="${a.id}" data-username="${escapeHtml(a.username)}">Remove</button>`}
+            </td>
           </tr>
         `).join('')}
       </tbody>
@@ -1024,6 +1027,10 @@ function renderAdminsTable(admins) {
       Anyone added here can sign in to this entire admin panel — applications, events, community moderation, everything. Only add people you trust with full access.
     </p>
   `;
+
+  wrap.querySelectorAll('[data-edit-admin]').forEach((btn) =>
+    btn.addEventListener('click', () => openEditAdminModal(btn.dataset.editAdmin, btn.dataset.username))
+  );
 
   wrap.querySelectorAll('[data-delete-admin]').forEach((btn) =>
     btn.addEventListener('click', async () => {
@@ -1037,6 +1044,56 @@ function renderAdminsTable(admins) {
       }
     })
   );
+}
+
+function openEditAdminModal(id, currentUsername) {
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Edit admin</h3>
+          <button class="btn-ghost" id="modal-close">✕</button>
+        </div>
+        <label>Username</label>
+        <input id="edit-admin-username" value="${escapeHtml(currentUsername)}" />
+        <label>New password (optional)</label>
+        <input id="edit-admin-password" type="password" placeholder="Leave blank to keep current password" />
+        <div class="error-text" id="edit-admin-error"></div>
+        <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
+          <button class="btn-primary" id="save-admin-btn">Save changes</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-backdrop') closeModal();
+  });
+
+  document.getElementById('save-admin-btn').addEventListener('click', async () => {
+    const username = document.getElementById('edit-admin-username').value.trim();
+    const password = document.getElementById('edit-admin-password').value;
+    const errorEl = document.getElementById('edit-admin-error');
+    errorEl.textContent = '';
+
+    if (!username) {
+      errorEl.textContent = 'Username cannot be empty.';
+      return;
+    }
+
+    const payload = { username };
+    if (password) payload.password = password;
+
+    try {
+      await api(`/api/admin-users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      toast('Admin updated.');
+      closeModal();
+      loadAdmins();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  });
 }
 
 function openAddAdminModal() {

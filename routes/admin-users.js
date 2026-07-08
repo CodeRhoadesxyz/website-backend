@@ -31,6 +31,41 @@ router.post('/', requireAdmin, (req, res) => {
   res.status(201).json(created);
 });
 
+// --- Edit an admin account (username and/or password) ---
+router.patch('/:id', requireAdmin, (req, res) => {
+  const admin = db.prepare('SELECT * FROM admins WHERE id = ?').get(req.params.id);
+  if (!admin) return res.status(404).json({ error: 'Admin not found.' });
+
+  const { username, password } = req.body || {};
+  const updates = {};
+
+  if (username !== undefined) {
+    const trimmed = username.trim();
+    if (!trimmed) return res.status(400).json({ error: 'Username cannot be empty.' });
+    const existing = db.prepare('SELECT id FROM admins WHERE username = ? AND id != ?').get(trimmed, req.params.id);
+    if (existing) return res.status(409).json({ error: 'That username is already taken.' });
+    updates.username = trimmed;
+  }
+
+  if (password !== undefined && password !== '') {
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    }
+    updates.password_hash = bcrypt.hashSync(password, 12);
+  }
+
+  const setClause = Object.keys(updates)
+    .map((field) => `${field} = @${field}`)
+    .join(', ');
+
+  if (setClause) {
+    db.prepare(`UPDATE admins SET ${setClause} WHERE id = @id`).run({ ...updates, id: req.params.id });
+  }
+
+  const updated = db.prepare('SELECT id, username, created_at FROM admins WHERE id = ?').get(req.params.id);
+  res.json(updated);
+});
+
 router.delete('/:id', requireAdmin, (req, res) => {
   const targetId = Number(req.params.id);
 
