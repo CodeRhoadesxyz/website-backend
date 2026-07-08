@@ -14,6 +14,8 @@ const postRoutes = require('./routes/posts');
 const commentRoutes = require('./routes/comments');
 const statsRoutes = require('./routes/stats');
 const adminUserRoutes = require('./routes/admin-users');
+const donationRoutes = require('./routes/donations');
+const volunteerRoutes = require('./routes/volunteers');
 
 const app = express();
 
@@ -68,6 +70,8 @@ app.use('/api/posts', postRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/admin-users', adminUserRoutes);
+app.use('/api/donations', donationRoutes);
+app.use('/api/volunteers', volunteerRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
