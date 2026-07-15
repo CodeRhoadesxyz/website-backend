@@ -1327,6 +1327,7 @@ function renderHomeStats(stats) {
           <div class="mono" style="color:var(--muted); font-size:0.8rem;">Avg. days to adoption</div>
         </div>
       </div>
+      <p style="color:var(--muted); font-size:0.78rem; margin-top:0.75rem;">Handy for grant applications — "we've placed X birds at an average of Y days" type figures.</p>
     </div>
     <p style="color:var(--muted); font-size:0.85rem; margin-top:1rem;">Click a card to jump to that section.</p>
   `;
