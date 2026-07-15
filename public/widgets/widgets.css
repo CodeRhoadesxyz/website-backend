@@ -280,36 +280,93 @@
 .rw-wishlist-desc { font-size: 0.9rem; color: #6b6b6b; margin-top: 0.3rem; }
 
 /* --- Testimonials --- */
-.rw-testimonial-share-btn {
-  background: var(--rw-canopy, #4f7358);
-  color: #fff;
-  border: none;
-  border-radius: 999px;
-  padding: 0.6rem 1.2rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-size: 0.9rem;
+.rescue-widget.rw-testimonial-wrap { max-width: none; width: 100%; margin: 0; }
+.rw-testimonial-header {
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto 2.25rem;
 }
-.rw-testimonial-share-btn:hover { background: var(--rw-canopy-dark, #1f3a2c); }
+.rw-testimonial-header h3 {
+  font-size: 1.9rem;
+  margin: 0 0 0.5rem;
+}
+.rw-testimonial-subhead {
+  color: #6b6b6b;
+  font-size: 1rem;
+  margin: 0 0 1.25rem;
+}
+.rw-testimonial-empty {
+  text-align: center;
+  color: #6b6b6b;
+}
 .rw-testimonial-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.75rem;
+  max-width: 1080px;
+  margin: 0 auto;
 }
 .rw-testimonial-card {
+  position: relative;
+  text-align: center;
+  background: #fff;
   border: 1px solid var(--rw-line, #dde3d6);
-  border-radius: 14px;
-  padding: 1.25rem;
+  border-radius: 18px;
+  padding: 2rem 1.5rem 1.5rem;
+  box-shadow: 0 4px 18px rgba(31, 58, 44, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.rw-testimonial-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 26px rgba(31, 58, 44, 0.12);
+}
+.rw-testimonial-quote-mark {
+  position: absolute;
+  top: -0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background: var(--rw-canopy, #4f7358);
+  color: #fff;
+  font-family: Georgia, serif;
+  font-size: 1.7rem;
+  line-height: 2.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(31, 58, 44, 0.25);
 }
 .rw-testimonial-photo {
-  width: 100%;
-  height: 160px;
+  width: 76px;
+  height: 76px;
   object-fit: cover;
-  border-radius: 10px;
-  margin-bottom: 0.75rem;
+  border-radius: 50%;
+  margin: 0.5rem auto 1rem;
+  display: block;
+  border: 3px solid var(--rw-line, #dde3d6);
 }
-.rw-testimonial-story { font-style: italic; margin-bottom: 0.6rem; line-height: 1.5; }
-.rw-testimonial-meta { font-size: 0.85rem; color: #6b6b6b; font-weight: 600; }
+.rw-testimonial-photo-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--rw-canopy, #4f7358);
+  color: #fff;
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+.rw-testimonial-story {
+  font-style: italic;
+  margin: 0 0 1rem;
+  line-height: 1.6;
+  color: #333;
+}
+.rw-testimonial-meta { font-size: 0.9rem; color: var(--rw-canopy-dark, #1f3a2c); font-weight: 600; }
+.rw-testimonial-bird { color: #6b6b6b; font-weight: 500; }
+.rw-testimonial-date { font-size: 0.78rem; color: #999; margin-top: 0.2rem; }
+#rw-story-form-slot .rw-blog-inline-form { max-width: 480px; margin: 0 auto 2rem; text-align: left; }
 
 /* --- FAQ --- */
 .rw-faq-item {
@@ -829,8 +886,14 @@
   .rescue-widget .rw-wishlist-item { border-color: rgba(255,255,255,0.15); }
   .rescue-widget .rw-wishlist-desc { color: #c9c9c9; }
 
-  .rescue-widget .rw-testimonial-card { border-color: rgba(255,255,255,0.15); }
-  .rescue-widget .rw-testimonial-meta { color: #c9c9c9; }
+  .rescue-widget .rw-testimonial-card { background: #1c2420; border-color: rgba(255,255,255,0.15); box-shadow: 0 4px 18px rgba(0,0,0,0.25); }
+  .rescue-widget .rw-testimonial-story { color: #ddd8ca; }
+  .rescue-widget .rw-testimonial-meta { color: #9fd1ac; }
+  .rescue-widget .rw-testimonial-subhead,
+  .rescue-widget .rw-testimonial-empty,
+  .rescue-widget .rw-testimonial-bird { color: #c9c9c9; }
+  .rescue-widget .rw-testimonial-date { color: #8a8a8a; }
+  .rescue-widget .rw-testimonial-photo { border-color: rgba(255,255,255,0.18); }
 
   .rescue-widget .rw-faq-item { border-color: rgba(255,255,255,0.15); }
   .rescue-widget .rw-faq-question { color: #f2efe6; }

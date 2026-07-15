@@ -26,19 +26,26 @@
     try {
       const stories = await getJson(apiBase, '/api/testimonials');
       container.innerHTML = `
-        <div class="rescue-widget">
-          <div style="margin-bottom:1.5rem;">
+        <div class="rescue-widget rw-testimonial-wrap">
+          <div class="rw-testimonial-header">
+            <h3>Happy tails</h3>
+            <p class="rw-testimonial-subhead">Stories from the families our birds have joined</p>
             <button class="rw-testimonial-share-btn" id="rw-share-story-btn">Share your story →</button>
           </div>
           <div id="rw-story-form-slot"></div>
           ${stories.length === 0
-            ? '<p>No stories shared yet — be the first!</p>'
+            ? '<p class="rw-testimonial-empty">No stories shared yet — be the first!</p>'
             : `<div class="rw-testimonial-grid">
                 ${stories.map((s) => `
                   <div class="rw-testimonial-card">
-                    ${s.photo_url ? `<img class="rw-testimonial-photo" src="${escapeHtml(s.photo_url)}" alt="" />` : ''}
-                    <p class="rw-testimonial-story">"${escapeHtml(s.story)}"</p>
-                    <div class="rw-testimonial-meta">— ${escapeHtml(s.author_name)}${s.bird_name ? `, adopted ${escapeHtml(s.bird_name)}` : ''} · ${fmtDate(s.created_at)}</div>
+                    <div class="rw-testimonial-quote-mark">&ldquo;</div>
+                    ${s.photo_url
+                      ? `<img class="rw-testimonial-photo" src="${escapeHtml(s.photo_url)}" alt="" />`
+                      : `<div class="rw-testimonial-photo rw-testimonial-photo-placeholder">${escapeHtml((s.author_name || '?').trim().charAt(0).toUpperCase())}</div>`
+                    }
+                    <p class="rw-testimonial-story">${escapeHtml(s.story)}</p>
+                    <div class="rw-testimonial-meta">${escapeHtml(s.author_name)}${s.bird_name ? `<span class="rw-testimonial-bird"> · adopted ${escapeHtml(s.bird_name)}</span>` : ''}</div>
+                    <div class="rw-testimonial-date">${fmtDate(s.created_at)}</div>
                   </div>
                 `).join('')}
               </div>`
