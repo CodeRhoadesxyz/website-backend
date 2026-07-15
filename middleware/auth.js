@@ -29,10 +29,10 @@ function requireUser(req, res, next) {
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user = db.prepare('SELECT id, username, display_name, avatar_url, role, is_banned FROM users WHERE id = ?').get(payload.id);
+    const user = db.prepare('SELECT id, username, display_name, avatar_url, role, email, is_banned FROM users WHERE id = ?').get(payload.id);
     if (!user) return res.status(401).json({ error: 'Account no longer exists.' });
     if (user.is_banned) return res.status(403).json({ error: 'This account has been suspended.' });
-    req.user = { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url, role: user.role };
+    req.user = { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url, role: user.role, email: user.email };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Session expired. Please sign in again.' });
@@ -49,9 +49,9 @@ function attachIdentity(req, res, next) {
   if (userToken) {
     try {
       const payload = jwt.verify(userToken, process.env.JWT_SECRET);
-      const user = db.prepare('SELECT id, username, display_name, avatar_url, role, is_banned FROM users WHERE id = ?').get(payload.id);
+      const user = db.prepare('SELECT id, username, display_name, avatar_url, role, email, is_banned FROM users WHERE id = ?').get(payload.id);
       if (user && !user.is_banned) {
-        req.user = { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url, role: user.role };
+        req.user = { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url, role: user.role, email: user.email };
       }
     } catch (err) {
       // invalid/expired — just leave req.user unset
@@ -70,4 +70,23 @@ function attachIdentity(req, res, next) {
   next();
 }
 
-module.exports = { requireAdmin, requireUser, attachIdentity };
+// For the Database tools panel — restricted to one specific admin account
+// (set via SUPER_ADMIN_USERNAME), regardless of how many other admins exist.
+// Deliberately layered on top of requireAdmin rather than being its own
+// separate login, so it's still the same admin session/cookie underneath.
+// requireAdmin ends the response itself on failure (401) without calling
+// next(), so this callback only ever runs after a successful admin check.
+function requireSuperAdmin(req, res, next) {
+  requireAdmin(req, res, () => {
+    const superUsername = (process.env.SUPER_ADMIN_USERNAME || '').toLowerCase();
+    if (!superUsername) {
+      return res.status(503).json({ error: 'Database tools are not configured (SUPER_ADMIN_USERNAME is not set).' });
+    }
+    if (req.admin.username.toLowerCase() !== superUsername) {
+      return res.status(403).json({ error: 'This area is restricted.' });
+    }
+    next();
+  });
+}
+
+module.exports = { requireAdmin, requireUser, attachIdentity, requireSuperAdmin };

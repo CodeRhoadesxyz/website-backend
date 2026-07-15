@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Database Tools · Heart & Soul Parrot Rescue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/admin/styles.css" />
+<style>
+  .sa-warning {
+    background: rgba(193,85,74,0.12);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+  }
+  .sa-section { margin-bottom: 2.5rem; }
+  .sa-table-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin-bottom: 0.6rem;
+  }
+  .sa-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <div class="sidebar">
+      <div class="brand">Database<br />Tools</div>
+      <a href="/admin/index.html" class="nav-tab">← Back to admin panel</a>
+      <div class="nav-tab" data-tab="overview">Tables overview</div>
+      <div class="nav-tab" data-tab="undo">Undo log</div>
+      <div class="nav-tab" data-tab="query">Read-only query</div>
+      <div class="nav-tab" data-tab="monitor">Server monitor</div>
+      <div class="nav-tab" data-tab="backup">Backup</div>
+      <div class="spacer"></div>
+      <div class="nav-tab" id="logout-btn">Sign out</div>
+    </div>
+
+    <div class="main">
+      <div class="topbar">
+        <h2 id="view-title">Tables overview</h2>
+        <span class="mono" id="signed-in-as" style="color:var(--muted); font-size:0.85rem;"></span>
+      </div>
+
+      <div class="sa-warning">
+        ⚠️ These tools edit your live database directly. Flushes and edits can be reversed from the
+        <strong>Undo log</strong> tab for 72 hours, but a full backup is still your real safety net —
+        download one before anything you're not fully sure about.
+      </div>
+
+      <div id="content-view"></div>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

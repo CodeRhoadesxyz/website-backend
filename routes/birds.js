@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
+const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
 
@@ -41,7 +42,7 @@ router.get('/:id', (req, res) => {
 });
 
 router.post('/', requireAdmin, (req, res) => {
-  const { name, species, age, sex, description, photo_url, status, is_published } = req.body || {};
+  const { name, species, age, sex, description, photo_url, status, is_published, sponsor_url } = req.body || {};
 
   if (!name || !species) {
     return res.status(400).json({ error: 'Name and species are required.' });
@@ -53,8 +54,8 @@ router.post('/', requireAdmin, (req, res) => {
 
   const result = db
     .prepare(
-      `INSERT INTO birds (name, species, age, sex, description, photo_url, status, is_published)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO birds (name, species, age, sex, description, photo_url, status, is_published, sponsor_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       name,
@@ -64,10 +65,12 @@ router.post('/', requireAdmin, (req, res) => {
       description || '',
       photo_url || '',
       status || 'available',
-      is_published === false ? 0 : 1
+      is_published === false ? 0 : 1,
+      sponsor_url || ''
     );
 
   const created = db.prepare('SELECT * FROM birds WHERE id = ?').get(result.lastInsertRowid);
+  logActivity(req.admin, 'birds', 'create', created.id, created);
   res.status(201).json(created);
 });
 
@@ -79,7 +82,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Unknown status.' });
   }
 
-  const fields = ['name', 'species', 'age', 'sex', 'description', 'photo_url', 'status', 'is_published'];
+  const fields = ['name', 'species', 'age', 'sex', 'description', 'photo_url', 'status', 'is_published', 'sponsor_url'];
   const updates = {};
   for (const field of fields) {
     if (field in (req.body || {})) {
@@ -98,6 +101,10 @@ router.patch('/:id', requireAdmin, (req, res) => {
       ...updates,
       id: req.params.id,
     });
+
+    const before = {};
+    Object.keys(updates).forEach((field) => { before[field] = existing[field]; });
+    logActivity(req.admin, 'birds', 'edit', existing.id, before);
   }
 
   const updated = db.prepare('SELECT * FROM birds WHERE id = ?').get(req.params.id);
@@ -105,8 +112,11 @@ router.patch('/:id', requireAdmin, (req, res) => {
 });
 
 router.delete('/:id', requireAdmin, (req, res) => {
-  const result = db.prepare('DELETE FROM birds WHERE id = ?').run(req.params.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Bird not found.' });
+  const existing = db.prepare('SELECT * FROM birds WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Bird not found.' });
+
+  db.prepare('DELETE FROM birds WHERE id = ?').run(req.params.id);
+  logActivity(req.admin, 'birds', 'delete', existing.id, existing);
   res.json({ ok: true });
 });
 

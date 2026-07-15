@@ -24,10 +24,21 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type TEXT NOT NULL CHECK (type IN ('adoption', 'relinquishment', 'volunteer')),
     data TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'in_review', 'approved', 'declined', 'archived')),
+    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'in_review', 'needs_info', 'approved', 'declined', 'archived')),
     admin_notes TEXT DEFAULT '',
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS application_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id INTEGER NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+    sender_type TEXT NOT NULL CHECK (sender_type IN ('admin', 'applicant')),
+    sender_id INTEGER,
+    sender_name TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS events (
@@ -88,6 +99,9 @@ db.exec(`
     password_hash TEXT NOT NULL,
     avatar_url TEXT DEFAULT '',
     role TEXT DEFAULT '',
+    email TEXT DEFAULT '',
+    reset_token TEXT,
+    reset_token_expires TEXT,
     is_banned INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -109,67 +123,52 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
-  -- Manually-logged donations (checks, cash, or off-site platforms like
-  -- PayPal/Facebook Giving) — not a payment processor integration, just a
-  -- record-keeping + reporting tool for whatever came in.
-  CREATE TABLE IF NOT EXISTS donations (
+  CREATE TABLE IF NOT EXISTS fosters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    donor_name TEXT NOT NULL,
-    donor_email TEXT DEFAULT '',
-    amount REAL NOT NULL,
-    donation_date TEXT NOT NULL,
-    method TEXT NOT NULL DEFAULT 'other' CHECK (method IN ('cash', 'check', 'online', 'in_kind', 'other')),
-    campaign TEXT DEFAULT '',
-    is_recurring INTEGER NOT NULL DEFAULT 0,
-    notes TEXT DEFAULT '',
-    -- Opt-in only: whether this donor agreed to be named on the public
-    -- "top donors" widget. Defaults off, since most rows here are logged
-    -- from checks/cash with no expectation of public recognition -- this
-    -- table is bookkeeping, not a public donation form. Never show a donor
-    -- publicly without this explicitly being set to 1.
-    display_publicly INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  -- Roster of approved, active volunteers/fosters. Distinct from the
-  -- applications table (the initial "volunteer" form submission) — a
-  -- volunteer row is created once someone's approved and sticks around for
-  -- as long as they're involved, tracking their fostering history and hours.
-  CREATE TABLE IF NOT EXISTS volunteers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    full_name TEXT NOT NULL,
-    email TEXT DEFAULT '',
-    phone TEXT DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
-    skills TEXT DEFAULT '',
-    notes TEXT DEFAULT '',
-    application_id INTEGER REFERENCES applications(id) ON DELETE SET NULL,
-    joined_date TEXT NOT NULL DEFAULT (date('now')),
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  -- Which volunteer is fostering which bird, and when. end_date is NULL
-  -- while the foster is ongoing.
-  CREATE TABLE IF NOT EXISTS foster_assignments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    volunteer_id INTEGER NOT NULL REFERENCES volunteers(id) ON DELETE CASCADE,
     bird_id INTEGER NOT NULL REFERENCES birds(id) ON DELETE CASCADE,
-    start_date TEXT NOT NULL DEFAULT (date('now')),
+    foster_name TEXT NOT NULL,
+    foster_contact TEXT DEFAULT '',
+    start_date TEXT NOT NULL,
     end_date TEXT,
     notes TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
-  -- Logged volunteer hours, one row per entry so they can be reported on by
-  -- date range as well as summed per-volunteer.
-  CREATE TABLE IF NOT EXISTS volunteer_hours (
+  CREATE TABLE IF NOT EXISTS wishlist_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    volunteer_id INTEGER NOT NULL REFERENCES volunteers(id) ON DELETE CASCADE,
-    log_date TEXT NOT NULL,
-    hours REAL NOT NULL,
-    activity TEXT DEFAULT '',
+    item_name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    quantity_needed TEXT DEFAULT '',
+    is_fulfilled INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS testimonials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    author_name TEXT NOT NULL,
+    bird_name TEXT DEFAULT '',
+    story TEXT NOT NULL,
+    photo_url TEXT DEFAULT '',
+    is_approved INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS waitlist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bird_id INTEGER NOT NULL REFERENCES birds(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS faqs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    is_published INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -182,63 +181,52 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at);
   CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id);
   CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
-  CREATE INDEX IF NOT EXISTS idx_donations_date ON donations(donation_date);
-  CREATE INDEX IF NOT EXISTS idx_donations_method ON donations(method);
-  CREATE INDEX IF NOT EXISTS idx_volunteers_status ON volunteers(status);
-  CREATE INDEX IF NOT EXISTS idx_foster_volunteer ON foster_assignments(volunteer_id);
-  CREATE INDEX IF NOT EXISTS idx_foster_bird ON foster_assignments(bird_id);
-  CREATE INDEX IF NOT EXISTS idx_foster_active ON foster_assignments(end_date);
-  CREATE INDEX IF NOT EXISTS idx_hours_volunteer ON volunteer_hours(volunteer_id, log_date);
-
-  -- One-time tokens for the "forgot password" flow. Shared by both admin
-  -- accounts and blog users (account_type distinguishes them), so a token
-  -- minted for one can never be used to reset the other.
-  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  CREATE INDEX IF NOT EXISTS idx_fosters_bird ON fosters(bird_id);
+  CREATE INDEX IF NOT EXISTS idx_testimonials_approved ON testimonials(is_approved);
+  CREATE INDEX IF NOT EXISTS idx_waitlist_bird ON waitlist(bird_id);
+  CREATE TABLE IF NOT EXISTS store_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_type TEXT NOT NULL CHECK (account_type IN ('admin', 'user')),
-    account_id INTEGER NOT NULL,
-    token_hash TEXT NOT NULL UNIQUE,
-    expires_at TEXT NOT NULL,
-    used_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_reset_tokens_lookup ON password_reset_tokens(token_hash, expires_at);
-
-  -- Every admin-initiated action (creates/updates/deletes across the portal,
-  -- plus sign-in/sign-out and password resets). Written automatically by the
-  -- audit middleware in server.js, so new routes get logged without any
-  -- extra code — see lib/auditLog.js for how entries are built.
-  CREATE TABLE IF NOT EXISTS audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    admin_id INTEGER,
-    admin_username TEXT NOT NULL DEFAULT '',
-    action TEXT NOT NULL,
-    method TEXT NOT NULL DEFAULT '',
-    path TEXT NOT NULL DEFAULT '',
-    details TEXT DEFAULT '',
-    ip TEXT DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
-  CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON audit_log(admin_id);
-
-  -- Single-row table (id is always 1) holding the site's maintenance-mode
-  -- state. starts_at/ends_at are optional — NULL means "no scheduled
-  -- start/end", i.e. it takes effect immediately and stays on until an admin
-  -- turns it off.
-  CREATE TABLE IF NOT EXISTS maintenance_mode (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    enabled INTEGER NOT NULL DEFAULT 0,
-    message TEXT NOT NULL DEFAULT 'We''re currently performing scheduled maintenance. Please check back soon.',
-    starts_at TEXT,
-    ends_at TEXT,
-    updated_by INTEGER,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    price REAL NOT NULL,
+    sale_price REAL,
+    is_on_sale INTEGER NOT NULL DEFAULT 0,
+    is_clearance INTEGER NOT NULL DEFAULT 0,
+    is_sold_out INTEGER NOT NULL DEFAULT 0,
+    image_url TEXT DEFAULT '',
+    buy_url TEXT DEFAULT '',
+    is_published INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
-  INSERT OR IGNORE INTO maintenance_mode (id, enabled) VALUES (1, 0);
+  CREATE INDEX IF NOT EXISTS idx_faqs_published ON faqs(is_published, sort_order);
+  CREATE TABLE IF NOT EXISTS undo_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    table_name TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('edit', 'flush')),
+    row_id INTEGER,
+    snapshot TEXT NOT NULL,
+    is_undone INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_store_published ON store_items(is_published);
+  CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id INTEGER NOT NULL,
+    admin_username TEXT NOT NULL,
+    table_name TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('create', 'edit', 'delete')),
+    row_id INTEGER,
+    snapshot TEXT NOT NULL,
+    is_undone INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_undo_log_undone ON undo_log(is_undone, created_at);
+  CREATE INDEX IF NOT EXISTS idx_activity_log_admin ON activity_log(admin_id, is_undone, created_at);
+  CREATE INDEX IF NOT EXISTS idx_application_messages_app ON application_messages(application_id);
 `);
 
 function addColumnIfMissing(table, columnDef) {
@@ -249,21 +237,51 @@ function addColumnIfMissing(table, columnDef) {
   }
 }
 
+// A database created before this update has an `applications` table whose
+// CHECK constraint doesn't allow 'needs_info' as a status, and has no
+// user_id column at all. SQLite can't ALTER a CHECK constraint or add a
+// column with a REFERENCES clause after the fact, so this rebuilds the
+// table in place (same technique SQLite's own docs recommend) — but only
+// runs at all if the old schema is actually detected, so this is a no-op on
+// a fresh install (which already gets the right schema from CREATE TABLE
+// above) and a no-op on any database that's already been migrated once.
+function migrateApplicationsTableIfNeeded() {
+  const table = db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'applications'`).get();
+  if (!table || table.sql.includes('needs_info')) return;
+
+  db.exec(`
+    ALTER TABLE applications RENAME TO applications_old;
+
+    CREATE TABLE applications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL CHECK (type IN ('adoption', 'relinquishment', 'volunteer')),
+      data TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'in_review', 'needs_info', 'approved', 'declined', 'archived')),
+      admin_notes TEXT DEFAULT '',
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    INSERT INTO applications (id, type, data, status, admin_notes, user_id, created_at, updated_at)
+      SELECT id, type, data, status, admin_notes, NULL, created_at, updated_at FROM applications_old;
+
+    DROP TABLE applications_old;
+
+    CREATE INDEX IF NOT EXISTS idx_applications_type ON applications(type);
+    CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
+  `);
+}
+
+migrateApplicationsTableIfNeeded();
+
 addColumnIfMissing('announcements', "image_url TEXT DEFAULT ''");
 addColumnIfMissing('users', "avatar_url TEXT DEFAULT ''");
 addColumnIfMissing('users', "role TEXT DEFAULT ''");
 addColumnIfMissing('users', "email TEXT DEFAULT ''");
-addColumnIfMissing('admins', "email TEXT DEFAULT ''");
-// Lets an admin "claim" an application so two people don't both reach out to
-// the same applicant. Stored as a plain admin id (not an inline FK — SQLite's
-// ALTER TABLE ADD COLUMN restricts REFERENCES clauses on existing tables) and
-// resolved to a username via a join in the route.
-addColumnIfMissing('applications', 'claimed_by INTEGER');
-addColumnIfMissing('applications', 'claimed_at TEXT');
-// Opt-in flag for the public "top donors" widget — see the CREATE TABLE
-// comment above. Kept as a migration too so this lands on existing
-// databases, not just freshly-created ones.
-addColumnIfMissing('donations', 'display_publicly INTEGER NOT NULL DEFAULT 0');
+addColumnIfMissing('users', "reset_token TEXT");
+addColumnIfMissing('users', "reset_token_expires TEXT");
+addColumnIfMissing('birds', "sponsor_url TEXT DEFAULT ''");
 
 try {
   db.exec(`UPDATE users SET username = LOWER(username) WHERE username != LOWER(username)`);

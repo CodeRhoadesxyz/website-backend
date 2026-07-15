@@ -1,16 +1,13 @@
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { requireUser, requireAdmin } = require('../middleware/auth');
-const { createResetToken, verifyResetToken, consumeResetToken } = require('../lib/passwordReset');
-const { sendPasswordResetEmail } = require('../lib/email');
+const { sendPasswordResetEmail } = require('../lib/mailer');
+const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
-
-// Where the blog/front-end lives, so reset links point to a real page there
-// (e.g. https://heartandsoulparrotrescue.com/reset-password).
-const SITE_BASE_URL = process.env.SITE_BASE_URL || '';
 
 const userCookieOptions = {
   httpOnly: true,
@@ -30,24 +27,30 @@ function publicUser(user) {
   };
 }
 
+// Where the password-reset link should point — your blog page, wherever it
+// actually lives. Falls back to a best guess (your first allowed origin +
+// /blog.html) if BLOG_PAGE_URL isn't set, but setting it explicitly is safer.
+function getBlogPageUrl() {
+  if (process.env.BLOG_PAGE_URL) return process.env.BLOG_PAGE_URL;
+  const firstOrigin = (process.env.ALLOWED_ORIGINS || '').split(',')[0]?.trim();
+  return firstOrigin ? `${firstOrigin}/blog.html` : null;
+}
+
 router.post('/signup', (req, res) => {
   const { password, display_name, email } = req.body || {};
   const username = (req.body && req.body.username || '').toLowerCase();
 
-  if (!username || !password || !display_name) {
-    return res.status(400).json({ error: 'Username, password, and display name are required.' });
+  if (!username || !password || !display_name || !email) {
+    return res.status(400).json({ error: 'Username, password, display name, and email are required.' });
   }
   if (!/^[a-z0-9_.-]{3,30}$/.test(username)) {
     return res.status(400).json({ error: 'Username must be 3-30 characters (letters, numbers, _ . -).' });
   }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
   if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-  }
-  // Email is optional at signup (existing accounts won't have one either),
-  // but if it's provided, make sure it's at least plausible — without an
-  // email on file the account simply can't use "forgot password" later.
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'That email address doesn\'t look valid.' });
   }
 
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
@@ -58,7 +61,7 @@ router.post('/signup', (req, res) => {
   const passwordHash = bcrypt.hashSync(password, 12);
   const result = db
     .prepare('INSERT INTO users (username, display_name, password_hash, email) VALUES (?, ?, ?, ?)')
-    .run(username, display_name, passwordHash, (email || '').trim());
+    .run(username, display_name, passwordHash, email.trim().toLowerCase());
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
   const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -92,6 +95,63 @@ router.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// --- Request a password reset email ---
+router.post('/forgot-password', (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.trim().toLowerCase());
+
+  // Always respond the same way whether or not the email is registered, so
+  // this can't be used to check which emails have accounts.
+  if (user) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+    db.prepare('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?').run(
+      tokenHash,
+      expires,
+      user.id
+    );
+
+    const blogPageUrl = getBlogPageUrl();
+    if (blogPageUrl) {
+      const resetUrl = `${blogPageUrl}${blogPageUrl.includes('?') ? '&' : '?'}reset=${token}`;
+      sendPasswordResetEmail(user, resetUrl);
+    } else {
+      console.warn('Password reset requested but BLOG_PAGE_URL/ALLOWED_ORIGINS is not set — cannot build a reset link.');
+    }
+  }
+
+  res.json({ message: "If that email is registered, we've sent a password reset link." });
+});
+
+// --- Complete a password reset using the token from the email ---
+router.post('/reset-password', (req, res) => {
+  const { token, password } = req.body || {};
+  if (!token || !password) {
+    return res.status(400).json({ error: 'Reset token and new password are required.' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const user = db.prepare('SELECT * FROM users WHERE reset_token = ?').get(tokenHash);
+
+  if (!user || !user.reset_token_expires || new Date(user.reset_token_expires) < new Date()) {
+    return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+  }
+
+  const passwordHash = bcrypt.hashSync(password, 12);
+  db.prepare(
+    'UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?'
+  ).run(passwordHash, user.id);
+
+  res.json({ message: 'Password updated — you can now log in with your new password.' });
+});
+
 router.get('/me', requireUser, (req, res) => {
   res.json(req.user);
 });
@@ -108,10 +168,11 @@ router.patch('/me', requireUser, (req, res) => {
     updates.avatar_url = avatar_url.trim();
   }
   if (email !== undefined) {
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: 'That email address doesn\'t look valid.' });
+    const trimmed = email.trim().toLowerCase();
+    if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
     }
-    updates.email = email.trim();
+    updates.email = trimmed;
   }
 
   const setClause = Object.keys(updates)
@@ -126,54 +187,10 @@ router.patch('/me', requireUser, (req, res) => {
   res.json(publicUser(updated));
 });
 
-// --- Forgot / reset password (blog accounts) ---
-
-router.post('/forgot-password', async (req, res) => {
-  const { username } = req.body || {};
-
-  // Same generic response regardless of outcome, so this can't be used to
-  // enumerate valid usernames.
-  const genericResponse = { ok: true, message: 'If that account exists, a reset link has been sent.' };
-
-  if (!username) return res.json(genericResponse);
-
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.toLowerCase());
-  if (!user || !user.email) return res.json(genericResponse);
-
-  const rawToken = createResetToken('user', user.id);
-  const resetUrl = `${SITE_BASE_URL}/reset-password?token=${rawToken}`;
-
-  await sendPasswordResetEmail({ to: user.email, resetUrl, accountLabel: 'blog' });
-
-  res.json(genericResponse);
-});
-
-router.post('/reset-password', (req, res) => {
-  const { token, password } = req.body || {};
-
-  if (!token || !password) {
-    return res.status(400).json({ error: 'Token and new password are required.' });
-  }
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-  }
-
-  const verified = verifyResetToken(token);
-  if (!verified || verified.accountType !== 'user') {
-    return res.status(400).json({ error: 'This reset link is invalid or has expired.' });
-  }
-
-  const passwordHash = bcrypt.hashSync(password, 12);
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, verified.accountId);
-  consumeResetToken(verified.tokenHash);
-
-  res.json({ ok: true });
-});
-
 router.get('/', requireAdmin, (req, res) => {
   const users = db
     .prepare(
-      `SELECT u.id, u.username, u.display_name, u.role, u.is_banned, u.created_at,
+      `SELECT u.id, u.username, u.display_name, u.role, u.email, u.is_banned, u.created_at,
               (SELECT COUNT(*) FROM posts WHERE user_id = u.id) as post_count,
               (SELECT COUNT(*) FROM comments WHERE user_id = u.id) as comment_count
        FROM users u ORDER BY u.created_at DESC`
@@ -186,22 +203,31 @@ router.patch('/:id', requireAdmin, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
+  const before = {};
   if ('is_banned' in (req.body || {})) {
     db.prepare('UPDATE users SET is_banned = ? WHERE id = ?').run(req.body.is_banned ? 1 : 0, req.params.id);
+    before.is_banned = user.is_banned;
   }
   if ('role' in (req.body || {})) {
     db.prepare('UPDATE users SET role = ? WHERE id = ?').run((req.body.role || '').trim(), req.params.id);
+    before.role = user.role;
+  }
+  if (Object.keys(before).length > 0) {
+    logActivity(req.admin, 'users', 'edit', user.id, before);
   }
 
   const updated = db
-    .prepare('SELECT id, username, display_name, role, is_banned, created_at FROM users WHERE id = ?')
+    .prepare('SELECT id, username, display_name, role, email, is_banned, created_at FROM users WHERE id = ?')
     .get(req.params.id);
   res.json(updated);
 });
 
 router.delete('/:id', requireAdmin, (req, res) => {
-  const result = db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  logActivity(req.admin, 'users', 'delete', user.id, user);
   res.json({ ok: true });
 });
 

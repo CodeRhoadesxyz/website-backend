@@ -102,7 +102,7 @@
 }
 .rescue-widget .rw-rsvp-btn:hover { background: rgba(79,115,88,0.08); }
 
-/* --- Announcement banner: deliberately slim, no card/box treatment --- */
+/* --- Announcement banner: bold and eye-catching, still a single slim line --- */
 .rescue-widget.rw-announcement-wrap {
   max-width: none;
   width: 100%;
@@ -110,41 +110,49 @@
 .rw-announcement {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  max-width: 720px;
+  gap: 0.7rem;
+  max-width: 760px;
   margin: 0 auto 1.75rem;
-  padding: 0.55rem 1.2rem;
-  border-radius: 999px;
-  background: rgba(79, 115, 88, 0.07);
-  font-size: 0.92rem;
-  line-height: 1.4;
-  color: var(--rw-canopy-dark, #1f3a2c);
-}
-.rw-announcement .rw-a-dot {
-  width: 7px;
-  height: 7px;
+  padding: 0.85rem 1.5rem;
   border-radius: 999px;
   background: var(--rw-coral, #d98872);
+  box-shadow: 0 6px 18px rgba(217, 136, 114, 0.35);
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #fff;
+}
+.rw-announcement .rw-a-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #fff;
   flex-shrink: 0;
+  animation: rw-pulse 1.8s ease-in-out infinite;
+}
+@keyframes rw-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
 }
 .rw-announcement .rw-a-thumb {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
   object-fit: cover;
   flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,0.6);
 }
-.rw-announcement .rw-a-title { font-weight: 700; }
-.rw-announcement .rw-a-message { color: inherit; opacity: 0.88; }
+.rw-announcement .rw-a-title { font-weight: 800; font-size: 1.05rem; }
+.rw-announcement .rw-a-message { color: inherit; opacity: 0.97; font-weight: 500; }
 .rw-announcement .rw-a-link {
-  font-weight: 600;
-  color: var(--rw-coral, #d98872);
-  text-decoration: none;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: underline;
   white-space: nowrap;
   margin-left: auto;
   padding-left: 0.75rem;
 }
-.rw-announcement .rw-a-link:hover { text-decoration: underline; }
+.rw-announcement .rw-a-link:hover { opacity: 0.85; }
 
 @media (max-width: 560px) {
   .rw-announcement { flex-wrap: wrap; border-radius: 20px; text-align: left; }
@@ -222,6 +230,204 @@
   margin-top: auto;
 }
 .rw-bird-apply-btn:hover { background: var(--rw-canopy-dark); }
+
+.rw-bird-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: auto; }
+.rw-bird-waitlist-btn,
+.rw-bird-sponsor-btn {
+  display: inline-block;
+  text-align: center;
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid var(--rw-canopy, #4f7358);
+  background: #fff;
+  color: var(--rw-canopy, #4f7358);
+}
+.rw-bird-waitlist-btn:hover,
+.rw-bird-sponsor-btn:hover { background: rgba(79,115,88,0.08); }
+
+/* --- Wishlist --- */
+.rw-wishlist-list { list-style: none; padding: 0; margin: 0; }
+.rw-wishlist-item {
+  border: 1px solid var(--rw-line, #dde3d6);
+  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.75rem;
+}
+.rw-wishlist-qty {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--rw-coral, #d98872);
+  text-transform: uppercase;
+}
+.rw-wishlist-desc { font-size: 0.9rem; color: #6b6b6b; margin-top: 0.3rem; }
+
+/* --- Testimonials --- */
+.rw-testimonial-share-btn {
+  background: var(--rw-canopy, #4f7358);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.rw-testimonial-share-btn:hover { background: var(--rw-canopy-dark, #1f3a2c); }
+.rw-testimonial-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.25rem;
+}
+.rw-testimonial-card {
+  border: 1px solid var(--rw-line, #dde3d6);
+  border-radius: 14px;
+  padding: 1.25rem;
+}
+.rw-testimonial-photo {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
+}
+.rw-testimonial-story { font-style: italic; margin-bottom: 0.6rem; line-height: 1.5; }
+.rw-testimonial-meta { font-size: 0.85rem; color: #6b6b6b; font-weight: 600; }
+
+/* --- FAQ --- */
+.rw-faq-item {
+  border-bottom: 1px solid var(--rw-line, #dde3d6);
+  padding: 1rem 0;
+}
+.rw-faq-question {
+  font-weight: 700;
+  cursor: pointer;
+  font-family: 'Fraunces', Georgia, serif;
+  color: var(--rw-canopy-dark, #1f3a2c);
+  list-style: none;
+}
+.rw-faq-question::-webkit-details-marker { display: none; }
+.rw-faq-question::before { content: '+ '; color: var(--rw-coral, #d98872); }
+.rw-faq-item[open] .rw-faq-question::before { content: '– '; }
+.rw-faq-answer { margin-top: 0.6rem; line-height: 1.6; color: #444; }
+
+/* --- Store --- */
+.rescue-widget.rw-store-wrap { max-width: none; width: 100%; margin: 0; }
+.rw-store-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.25rem;
+}
+.rw-store-card {
+  border: 1px solid var(--rw-line, #dde3d6);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.rw-store-photo { width: 100%; height: 180px; object-fit: cover; display: block; }
+.rw-store-photo-placeholder { background: rgba(79,115,88,0.08); }
+.rw-store-body { padding: 1rem 1.1rem 1.2rem; display: flex; flex-direction: column; flex: 1; }
+.rw-store-badges { display: flex; gap: 0.35rem; margin-bottom: 0.4rem; min-height: 1.4rem; }
+.rw-store-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+.rw-store-badge-clearance { background: rgba(193,85,74,0.15); color: #a13f34; }
+.rw-store-badge-sale { background: rgba(217,136,114,0.18); color: #a15239; }
+.rw-store-badge-soldout { background: rgba(124,143,134,0.18); color: #5c6b64; }
+.rw-store-name {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--rw-canopy-dark, #1f3a2c);
+  margin-bottom: 0.25rem;
+}
+.rw-store-desc { font-size: 0.88rem; color: #6b6b6b; margin-bottom: 0.6rem; flex: 1; }
+.rw-store-price { margin-bottom: 0.8rem; }
+.rw-store-price-was { text-decoration: line-through; color: #999; font-size: 0.9rem; margin-right: 0.4rem; }
+.rw-store-price-now { font-weight: 700; font-size: 1.1rem; color: var(--rw-canopy-dark, #1f3a2c); }
+.rw-store-buy-btn {
+  display: block;
+  text-align: center;
+  background: var(--rw-canopy, #4f7358);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  margin-top: auto;
+}
+.rw-store-buy-btn:hover { background: var(--rw-canopy-dark, #1f3a2c); }
+.rw-store-buy-btn-disabled {
+  background: #ccc;
+  color: #666;
+  cursor: not-allowed;
+}
+
+/* --- Impact --- */
+.rescue-widget.rw-impact-wrap { max-width: none; width: 100%; margin: 0; }
+.rw-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1.5rem;
+  text-align: center;
+}
+.rw-impact-number {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 700;
+  font-size: 2.4rem;
+  color: var(--rw-canopy, #4f7358);
+  line-height: 1;
+  margin-bottom: 0.4rem;
+}
+.rw-impact-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #6b6b6b;
+}
+
+/* --- My Applications: status badges/blocks --- */
+.rw-ma-status-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.rw-ma-status-block {
+  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  margin: 0.75rem 0 1.5rem;
+  font-size: 0.95rem;
+}
+
+.rw-ma-status-new,
+.rw-ma-status-in_review { background: rgba(143,180,214,0.18); color: #4e7291; }
+.rw-ma-status-needs_info { background: rgba(224,177,74,0.2); color: #8a6a1a; }
+.rw-ma-status-approved { background: rgba(79,115,88,0.18); color: var(--rw-canopy-dark, #1f3a2c); }
+.rw-ma-status-declined { background: rgba(193,85,74,0.15); color: #a13f34; }
+.rw-ma-status-archived { background: rgba(124,143,134,0.18); color: #5c6b64; }
+
+.rw-ma-status-block.rw-ma-status-new,
+.rw-ma-status-block.rw-ma-status-in_review { background: rgba(143,180,214,0.1); }
+.rw-ma-status-block.rw-ma-status-needs_info { background: rgba(224,177,74,0.12); }
+.rw-ma-status-block.rw-ma-status-approved { background: rgba(79,115,88,0.1); }
+.rw-ma-status-block.rw-ma-status-declined { background: rgba(193,85,74,0.08); }
+.rw-ma-status-block.rw-ma-status-archived { background: rgba(124,143,134,0.1); }
 
 /* --- In-page popup modal (used by the birds grid's Apply to Adopt button) --- */
 .rw-modal-backdrop {
@@ -433,54 +639,6 @@
   vertical-align: middle;
 }
 
-/* --- Donor spotlight: small cycling card meant to sit in a header/sidebar
-   slot on any page, cycling through this week's opted-in top donors --- */
-.rescue-widget.rw-donor-spotlight {
-  max-width: 320px;
-  background: #fff;
-  border: 1px solid var(--rw-line);
-  border-radius: 16px;
-  padding: 1.1rem 1.25rem;
-  text-align: center;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-}
-.rw-donor-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--rw-coral, #d98872);
-  margin-bottom: 0.5rem;
-}
-.rw-donor-rank {
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--rw-canopy, #4f7358);
-  opacity: 0.7;
-}
-.rw-donor-name {
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--rw-canopy-dark, #1f3a2c);
-  margin: 0.15rem 0 0.7rem;
-  word-break: break-word;
-}
-.rw-donor-dots {
-  display: flex;
-  justify-content: center;
-  gap: 0.3rem;
-}
-.rw-donor-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--rw-line);
-  transition: background 0.2s ease;
-}
-.rw-donor-dot.active { background: var(--rw-coral, #d98872); }
-
 /* --- Dark mode --- */
 /* The colors above assume a light/cream background. On a dark background,
    the same values (dark green, dark gray) read as near-black and become
@@ -520,6 +678,43 @@
   .rescue-widget .rw-bird-meta { color: #c9c9c9; }
   .rescue-widget .rw-bird-desc { color: #ddd8ca; }
 
+  .rescue-widget .rw-bird-waitlist-btn,
+  .rescue-widget .rw-bird-sponsor-btn {
+    background: transparent;
+    color: #9fd1ac;
+    border-color: rgba(255,255,255,0.25);
+  }
+  .rescue-widget .rw-bird-waitlist-btn:hover,
+  .rescue-widget .rw-bird-sponsor-btn:hover { background: rgba(255,255,255,0.06); }
+
+  .rescue-widget .rw-wishlist-item { border-color: rgba(255,255,255,0.15); }
+  .rescue-widget .rw-wishlist-desc { color: #c9c9c9; }
+
+  .rescue-widget .rw-testimonial-card { border-color: rgba(255,255,255,0.15); }
+  .rescue-widget .rw-testimonial-meta { color: #c9c9c9; }
+
+  .rescue-widget .rw-faq-item { border-color: rgba(255,255,255,0.15); }
+  .rescue-widget .rw-faq-question { color: #f2efe6; }
+  .rescue-widget .rw-faq-answer { color: #ddd8ca; }
+
+  .rescue-widget .rw-store-card { border-color: rgba(255,255,255,0.15); }
+  .rescue-widget .rw-store-photo-placeholder { background: rgba(255,255,255,0.06); }
+  .rescue-widget .rw-store-name { color: #f2efe6; }
+  .rescue-widget .rw-store-desc { color: #c9c9c9; }
+  .rescue-widget .rw-store-price-now { color: #f2efe6; }
+  .rescue-widget .rw-store-price-was { color: #999; }
+
+  .rescue-widget .rw-impact-number { color: #9fd1ac; }
+  .rescue-widget .rw-impact-label { color: #c9c9c9; }
+
+  .rescue-widget .rw-ma-status-new,
+  .rescue-widget .rw-ma-status-in_review { background: rgba(143,180,214,0.22); color: #aecfe8; }
+  .rescue-widget .rw-ma-status-needs_info { background: rgba(224,177,74,0.22); color: #f0d19c; }
+  .rescue-widget .rw-ma-status-approved { background: rgba(107,150,120,0.25); color: #a8dab6; }
+  .rescue-widget .rw-ma-status-declined { background: rgba(224,114,104,0.2); color: #f0aca4; }
+  .rescue-widget .rw-ma-status-archived { background: rgba(154,167,159,0.18); color: #c7d1cb; }
+  .rescue-widget .rw-ma-status-block { color: #ece7da; }
+
   .rescue-widget.rw-blog-wrap { background: #1c2420; border-color: rgba(255,255,255,0.15); }
   .rescue-widget .rw-blog-authbar { border-color: var(--rw-canopy); }
   .rescue-widget .rw-blog-link-btn { background: transparent; color: #9fd1ac; border-color: rgba(255,255,255,0.18); }
@@ -544,16 +739,4 @@
   .rw-modal { background: #1c2420; }
   .rw-modal-close { background: rgba(255,255,255,0.08); color: #ece7da; }
   .rw-modal-close:hover { background: rgba(255,255,255,0.16); }
-
-  .rw-announcement {
-    background: rgba(255,255,255,0.07);
-    color: #f2efe6;
-  }
-
-  .rescue-widget.rw-donor-spotlight {
-    background: rgba(255,255,255,0.05);
-    border-color: rgba(255,255,255,0.15);
-  }
-  .rw-donor-name { color: #f2efe6; }
-  .rw-donor-dot { background: rgba(255,255,255,0.2); }
 }

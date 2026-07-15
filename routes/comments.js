@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { attachIdentity } = require('../middleware/auth');
+const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
 
@@ -14,6 +15,9 @@ router.delete('/:id', attachIdentity, (req, res) => {
   }
 
   db.prepare('DELETE FROM comments WHERE id = ?').run(req.params.id);
+  if (req.admin) {
+    logActivity(req.admin, 'comments', 'delete', comment.id, comment);
+  }
   res.json({ ok: true });
 });
 

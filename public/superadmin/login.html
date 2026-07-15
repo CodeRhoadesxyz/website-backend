@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Sign in · Heart & Soul Parrot Rescue Admin</title>
+<title>Database Tools · Heart & Soul Parrot Rescue</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="/admin/styles.css" />
 </head>
 <body>
   <div class="login-wrap">
     <div class="login-card">
-      <div class="eyebrow">Admin Portal</div>
-      <h1>Heart &amp; Soul<br />Parrot Rescue</h1>
-      <p style="color:var(--muted); font-size:0.9rem; margin-top:0.25rem;">Sign in to manage applications and events.</p>
+      <div class="eyebrow">Restricted Area</div>
+      <h1>Database Tools</h1>
+      <p style="color:var(--muted); font-size:0.9rem; margin-top:0.25rem;">This area is only accessible to the site owner.</p>
 
       <form id="login-form">
         <label for="username">Username</label>
@@ -26,6 +26,7 @@
 
         <button type="submit" class="btn-primary" style="width:100%; margin-top:0.75rem;">Sign in</button>
       </form>
+      <p style="margin-top:1.25rem;"><a href="/admin/login.html" style="font-size:0.85rem;">← Back to the regular admin panel</a></p>
     </div>
   </div>
 
@@ -52,6 +53,18 @@
           errorText.textContent = data.error || 'Sign in failed.';
           return;
         }
+
+        // Login succeeded, but that alone doesn't mean this account is
+        // allowed in here — check against the real permission gate before
+        // redirecting, so an ordinary admin gets a clear message instead of
+        // a page full of confusing 403 errors.
+        const checkRes = await fetch(`${API_BASE}/api/db-admin/tables`, { credentials: 'include' });
+        if (!checkRes.ok) {
+          const checkData = await checkRes.json().catch(() => ({}));
+          errorText.textContent = checkData.error || 'This area is restricted to the site owner.';
+          return;
+        }
+
         window.location.href = './index.html';
       } catch (err) {
         errorText.textContent = 'Could not reach the server. Try again shortly.';

@@ -1,6 +1,8 @@
 const express = require('express');
 const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
+const { notifyAdminNewRsvp } = require('../lib/mailer');
+const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
 
@@ -59,6 +61,8 @@ router.post('/:id/rsvp', (req, res) => {
     .prepare('INSERT INTO rsvps (event_id, name, email, phone, guests, notes) VALUES (?, ?, ?, ?, ?, ?)')
     .run(event.id, name, email, phone || '', guestCount, notes || '');
 
+  notifyAdminNewRsvp(event, { name, email, phone: phone || '', guests: guestCount, notes: notes || '' });
+
   res.status(201).json({ id: result.lastInsertRowid, message: 'RSVP received.' });
 });
 
@@ -87,6 +91,7 @@ router.post('/', requireAdmin, (req, res) => {
     );
 
   const created = db.prepare('SELECT * FROM events WHERE id = ?').get(result.lastInsertRowid);
+  logActivity(req.admin, 'events', 'create', created.id, created);
   res.status(201).json(created);
 });
 
@@ -113,6 +118,10 @@ router.patch('/:id', requireAdmin, (req, res) => {
       ...updates,
       id: req.params.id,
     });
+
+    const before = {};
+    Object.keys(updates).forEach((field) => { before[field] = existing[field]; });
+    logActivity(req.admin, 'events', 'edit', existing.id, before);
   }
 
   const updated = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
@@ -120,8 +129,11 @@ router.patch('/:id', requireAdmin, (req, res) => {
 });
 
 router.delete('/:id', requireAdmin, (req, res) => {
-  const result = db.prepare('DELETE FROM events WHERE id = ?').run(req.params.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Event not found.' });
+  const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Event not found.' });
+
+  db.prepare('DELETE FROM events WHERE id = ?').run(req.params.id);
+  logActivity(req.admin, 'events', 'delete', existing.id, existing);
   res.json({ ok: true });
 });
 

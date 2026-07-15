@@ -12,7 +12,7 @@
   }
 
   const apiBase = window.RescueWidgets.getApiBase(scriptEl);
-  const { escapeHtml, getJson } = window.RescueWidgets;
+  const { escapeHtml, getJson, postJson } = window.RescueWidgets;
 
   // Optional: if you have a separate, dedicated adoption application page and
   // want the button to link there instead of popping up in place, set
@@ -63,9 +63,14 @@
                   </div>
                   <div class="rw-bird-meta">${escapeHtml(b.species)}${b.age ? ' · ' + escapeHtml(b.age) : ''}${b.sex ? ' · ' + escapeHtml(b.sex) : ''}</div>
                   ${b.description ? `<div class="rw-bird-desc">${escapeHtml(b.description)}</div>` : ''}
-                  ${applyUrl
-                    ? `<a class="rw-bird-apply-btn" href="${escapeHtml(buildApplyHref(b.name))}">Apply to Adopt →</a>`
-                    : `<button class="rw-bird-apply-btn" data-apply-bird="${escapeHtml(b.name)}">Apply to Adopt →</button>`}
+                  <div class="rw-bird-actions">
+                    ${applyUrl
+                      ? `<a class="rw-bird-apply-btn" href="${escapeHtml(buildApplyHref(b.name))}">Apply to Adopt →</a>`
+                      : `<button class="rw-bird-apply-btn" data-apply-bird="${escapeHtml(b.name)}">Apply to Adopt →</button>`}
+                    ${b.status === 'pending' ? `<button class="rw-bird-waitlist-btn" data-waitlist-bird="${b.id}" data-waitlist-name="${escapeHtml(b.name)}">Join waitlist</button>` : ''}
+                    ${b.sponsor_url ? `<a class="rw-bird-sponsor-btn" href="${escapeHtml(b.sponsor_url)}" target="_blank" rel="noopener">Sponsor ${escapeHtml(b.name)} 💚</a>` : ''}
+                  </div>
+                  <div id="rw-waitlist-form-${b.id}" style="margin-top:0.6rem; display:none;"></div>
                 </div>
               </div>
             `).join('')}
@@ -78,9 +83,51 @@
           btn.addEventListener('click', () => openApplyModal(btn.dataset.applyBird));
         });
       }
+      container.querySelectorAll('[data-waitlist-bird]').forEach((btn) => {
+        btn.addEventListener('click', () => toggleWaitlistForm(btn.dataset.waitlistBird, btn.dataset.waitlistName));
+      });
     } catch (err) {
       container.innerHTML = `<div class="rescue-widget"><p class="rw-error">Could not load adoptable birds right now.</p></div>`;
     }
+  }
+
+  function toggleWaitlistForm(birdId, birdName) {
+    const holder = document.getElementById(`rw-waitlist-form-${birdId}`);
+    if (holder.style.display === 'block') {
+      holder.style.display = 'none';
+      holder.innerHTML = '';
+      return;
+    }
+    holder.style.display = 'block';
+    holder.innerHTML = `
+      <form class="rw-blog-inline-form">
+        <label>Name</label>
+        <input name="name" required />
+        <label>Email</label>
+        <input name="email" type="email" required />
+        <label>Phone (optional)</label>
+        <input name="phone" type="tel" />
+        <div class="rw-error"></div>
+        <button type="submit">Join waitlist for ${escapeHtml(birdName)}</button>
+      </form>
+    `;
+    const form = holder.querySelector('form');
+    const errorEl = holder.querySelector('.rw-error');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      try {
+        const result = await postJson(apiBase, '/api/waitlist', {
+          bird_id: birdId,
+          name: form.name.value.trim(),
+          email: form.email.value.trim(),
+          phone: form.phone.value.trim(),
+        });
+        holder.innerHTML = `<div class="rw-success">${escapeHtml(result.message)}</div>`;
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
   }
 
   function openApplyModal(birdName) {

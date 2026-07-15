@@ -1,16 +1,13 @@
-// Usage: node scripts/create-admin.js <username> <password> [email]
-// Creates a new admin, or updates the password (and email, if given) if the
-// username already exists. An email is required for that admin to be able
-// to use "forgot password" later, so it's worth setting even though it's
-// optional here.
+// Usage: node scripts/create-admin.js <username> <password>
+// Creates a new admin, or updates the password if the username already exists.
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 
-const [, , username, password, email] = process.argv;
+const [, , username, password] = process.argv;
 
 if (!username || !password) {
-  console.error('Usage: node scripts/create-admin.js <username> <password> [email]');
+  console.error('Usage: node scripts/create-admin.js <username> <password>');
   process.exit(1);
 }
 
@@ -24,13 +21,9 @@ const passwordHash = bcrypt.hashSync(password, 12);
 const existing = db.prepare('SELECT id FROM admins WHERE username = ?').get(username);
 
 if (existing) {
-  if (email) {
-    db.prepare('UPDATE admins SET password_hash = ?, email = ? WHERE username = ?').run(passwordHash, email, username);
-  } else {
-    db.prepare('UPDATE admins SET password_hash = ? WHERE username = ?').run(passwordHash, username);
-  }
-  console.log(`Updated admin "${username}".`);
+  db.prepare('UPDATE admins SET password_hash = ? WHERE username = ?').run(passwordHash, username);
+  console.log(`Updated password for admin "${username}".`);
 } else {
-  db.prepare('INSERT INTO admins (username, password_hash, email) VALUES (?, ?, ?)').run(username, passwordHash, email || '');
+  db.prepare('INSERT INTO admins (username, password_hash) VALUES (?, ?)').run(username, passwordHash);
   console.log(`Created admin "${username}".`);
 }

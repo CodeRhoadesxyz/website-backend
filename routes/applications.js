@@ -1,29 +1,13 @@
 const express = require('express');
 const db = require('../db');
-const { requireAdmin } = require('../middleware/auth');
-const { sendNewApplicationNotification } = require('../lib/email');
+const { requireAdmin, requireUser, attachIdentity } = require('../middleware/auth');
+const { notifyAdminNewApplication } = require('../lib/mailer');
+const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
 
-// Comma-separated list of addresses to notify on every new application.
-// Falls back to every admin's email on file if not set.
-const NOTIFICATION_EMAILS = (process.env.APPLICATION_NOTIFICATION_EMAILS || '')
-  .split(',')
-  .map((e) => e.trim())
-  .filter(Boolean);
-
-const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || '';
-
-function getNotificationRecipients() {
-  if (NOTIFICATION_EMAILS.length > 0) return NOTIFICATION_EMAILS;
-  return db
-    .prepare(`SELECT email FROM admins WHERE email IS NOT NULL AND email != ''`)
-    .all()
-    .map((row) => row.email);
-}
-
 const VALID_TYPES = ['adoption', 'relinquishment', 'volunteer'];
-const VALID_STATUSES = ['new', 'in_review', 'approved', 'declined', 'archived'];
+const VALID_STATUSES = ['new', 'in_review', 'needs_info', 'approved', 'declined', 'archived'];
 
 const REQUIRED_FIELDS = {
   adoption: ['fullName', 'email', 'phone'],
@@ -37,7 +21,12 @@ function validateBody(type, body) {
   return missing;
 }
 
-router.post('/:type', (req, res) => {
+// attachIdentity is non-blocking — if the person happens to be logged in
+// (their blog/applications account) when they submit, the application gets
+// linked to their account automatically so it shows up in "My
+// Applications" later. If they're not logged in, the submission still goes
+// through exactly as before, just without that link.
+router.post('/:type', attachIdentity, (req, res) => {
   const { type } = req.params;
 
   if (!VALID_TYPES.includes(type)) {
@@ -51,50 +40,50 @@ router.post('/:type', (req, res) => {
     return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}` });
   }
 
-  const stmt = db.prepare('INSERT INTO applications (type, data) VALUES (?, ?)');
-  const result = stmt.run(type, JSON.stringify(body));
+  const stmt = db.prepare('INSERT INTO applications (type, data, user_id) VALUES (?, ?, ?)');
+  const result = stmt.run(type, JSON.stringify(body), req.user ? req.user.id : null);
 
-  // Respond to the applicant immediately — don't make them wait on an email
-  // round-trip. The notification is fire-and-forget; if it fails, it's
-  // logged in lib/email.js but doesn't affect the application being saved.
+  // Fire-and-forget: the application is already saved regardless of whether
+  // this email succeeds, and mailer.js itself swallows/logs any failure.
+  notifyAdminNewApplication(type, body);
+
   res.status(201).json({ id: result.lastInsertRowid, message: 'Application received.' });
+});
 
-  const recipients = getNotificationRecipients();
-  if (recipients.length > 0) {
-    sendNewApplicationNotification({
-      to: recipients,
-      type,
-      applicantName: body.fullName || 'Someone',
-      applicationId: result.lastInsertRowid,
-      adminUrl: `${ADMIN_BASE_URL}/admin/index.html`,
-    }).catch((err) => console.error('[applications] notification email failed:', err));
-  }
+// --- A logged-in applicant's own applications ---
+// Deliberately excludes admin_notes (internal-only) and must be registered
+// before GET /:id below, or Express would try to match "mine" as an :id.
+router.get('/mine', requireUser, (req, res) => {
+  const rows = db
+    .prepare('SELECT id, type, status, data, created_at, updated_at FROM applications WHERE user_id = ? ORDER BY created_at DESC')
+    .all(req.user.id);
+  res.json(rows.map((row) => ({ ...row, data: JSON.parse(row.data) })));
 });
 
 router.get('/', requireAdmin, (req, res) => {
-  const { type, status } = req.query;
+  const { type, status, search } = req.query;
 
-  let query = `
-    SELECT a.*, ad.username AS claimed_by_username
-    FROM applications a
-    LEFT JOIN admins ad ON ad.id = a.claimed_by
-    WHERE 1=1
-  `;
+  let query = 'SELECT * FROM applications WHERE 1=1';
   const params = [];
 
   if (type) {
     if (!VALID_TYPES.includes(type)) return res.status(400).json({ error: 'Unknown application type.' });
-    query += ' AND a.type = ?';
+    query += ' AND type = ?';
     params.push(type);
   }
 
   if (status) {
     if (!VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'Unknown status.' });
-    query += ' AND a.status = ?';
+    query += ' AND status = ?';
     params.push(status);
   }
 
-  query += ' ORDER BY a.created_at DESC';
+  if (search && search.trim()) {
+    query += ' AND data LIKE ?';
+    params.push(`%${search.trim()}%`);
+  }
+
+  query += ' ORDER BY created_at DESC';
 
   const rows = db.prepare(query).all(...params);
   const applications = rows.map((row) => ({ ...row, data: JSON.parse(row.data) }));
@@ -103,61 +92,9 @@ router.get('/', requireAdmin, (req, res) => {
 });
 
 router.get('/:id', requireAdmin, (req, res) => {
-  const row = db
-    .prepare(
-      `SELECT a.*, ad.username AS claimed_by_username
-       FROM applications a
-       LEFT JOIN admins ad ON ad.id = a.claimed_by
-       WHERE a.id = ?`
-    )
-    .get(req.params.id);
+  const row = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Application not found.' });
   res.json({ ...row, data: JSON.parse(row.data) });
-});
-
-// Claim an application so other admins can see someone's already on it and
-// avoid double-contacting the applicant. Re-claiming by the same admin who
-// already holds it just refreshes claimed_at; claiming something someone
-// else holds is rejected (409) rather than silently stealing it.
-router.post('/:id/claim', requireAdmin, (req, res) => {
-  const row = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Application not found.' });
-
-  if (row.claimed_by && row.claimed_by !== req.admin.id) {
-    const claimant = db.prepare('SELECT username FROM admins WHERE id = ?').get(row.claimed_by);
-    return res.status(409).json({ error: `Already claimed by ${claimant ? claimant.username : 'another admin'}.` });
-  }
-
-  db.prepare(`UPDATE applications SET claimed_by = ?, claimed_at = datetime('now') WHERE id = ?`).run(
-    req.admin.id,
-    req.params.id
-  );
-
-  const updated = db
-    .prepare(
-      `SELECT a.*, ad.username AS claimed_by_username
-       FROM applications a LEFT JOIN admins ad ON ad.id = a.claimed_by WHERE a.id = ?`
-    )
-    .get(req.params.id);
-  res.json({ ...updated, data: JSON.parse(updated.data) });
-});
-
-// Any admin can release a claim, not just the one who made it — this is a
-// small trusted team and someone should always be able to un-stick a claim
-// left by a colleague who's away, rather than needing that person specifically.
-router.post('/:id/unclaim', requireAdmin, (req, res) => {
-  const row = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Application not found.' });
-
-  db.prepare(`UPDATE applications SET claimed_by = NULL, claimed_at = NULL WHERE id = ?`).run(req.params.id);
-
-  const updated = db
-    .prepare(
-      `SELECT a.*, ad.username AS claimed_by_username
-       FROM applications a LEFT JOIN admins ad ON ad.id = a.claimed_by WHERE a.id = ?`
-    )
-    .get(req.params.id);
-  res.json({ ...updated, data: JSON.parse(updated.data) });
 });
 
 router.patch('/:id', requireAdmin, (req, res) => {
@@ -177,19 +114,82 @@ router.patch('/:id', requireAdmin, (req, res) => {
      WHERE id = ?`
   ).run(status || null, admin_notes ?? null, req.params.id);
 
-  const updated = db
-    .prepare(
-      `SELECT a.*, ad.username AS claimed_by_username
-       FROM applications a LEFT JOIN admins ad ON ad.id = a.claimed_by WHERE a.id = ?`
-    )
-    .get(req.params.id);
+  const before = {};
+  if (status) before.status = row.status;
+  if (admin_notes !== undefined) before.admin_notes = row.admin_notes;
+  if (Object.keys(before).length > 0) {
+    logActivity(req.admin, 'applications', 'edit', row.id, before);
+  }
+
+  const updated = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
   res.json({ ...updated, data: JSON.parse(updated.data) });
 });
 
 router.delete('/:id', requireAdmin, (req, res) => {
-  const result = db.prepare('DELETE FROM applications WHERE id = ?').run(req.params.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Application not found.' });
+  const row = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Application not found.' });
+
+  db.prepare('DELETE FROM applications WHERE id = ?').run(req.params.id);
+  logActivity(req.admin, 'applications', 'delete', row.id, row);
   res.json({ ok: true });
+});
+
+// --- Messages: a chat thread attached to one application ---
+// Readable/writable by an admin (any admin) or the applicant who owns it
+// (only if the application was linked to their account at submission time —
+// see the attachIdentity note on POST /:type above).
+function canAccessApplication(req, application) {
+  if (req.admin) return true;
+  if (req.user && application.user_id === req.user.id) return true;
+  return false;
+}
+
+router.get('/:id/messages', attachIdentity, (req, res) => {
+  const application = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
+  if (!application) return res.status(404).json({ error: 'Application not found.' });
+  if (!canAccessApplication(req, application)) {
+    return res.status(403).json({ error: 'Not allowed to view this conversation.' });
+  }
+
+  const messages = db
+    .prepare('SELECT * FROM application_messages WHERE application_id = ? ORDER BY created_at ASC')
+    .all(req.params.id);
+  res.json(messages);
+});
+
+router.post('/:id/messages', attachIdentity, (req, res) => {
+  const application = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
+  if (!application) return res.status(404).json({ error: 'Application not found.' });
+  if (!canAccessApplication(req, application)) {
+    return res.status(403).json({ error: 'Not allowed to message on this application.' });
+  }
+
+  const { body } = req.body || {};
+  if (!body || !body.trim()) {
+    return res.status(400).json({ error: 'Message cannot be empty.' });
+  }
+
+  // An admin replying always logs as 'admin', even in the unlikely case the
+  // same browser also happens to have a valid applicant session — admin
+  // identity takes priority since this is almost always called from the
+  // admin panel when req.admin is present.
+  const senderType = req.admin ? 'admin' : 'applicant';
+  const senderId = req.admin ? req.admin.id : req.user.id;
+  const senderName = req.admin ? req.admin.username : (db.prepare('SELECT display_name FROM users WHERE id = ?').get(req.user.id) || {}).display_name || 'Applicant';
+
+  const result = db
+    .prepare('INSERT INTO application_messages (application_id, sender_type, sender_id, sender_name, body) VALUES (?, ?, ?, ?, ?)')
+    .run(req.params.id, senderType, senderId, senderName, body.trim());
+
+  // Applications automatically move to "In review" once a real conversation
+  // starts, if they were still sitting untouched as "New" — a small but
+  // useful signal that something's actually happening on this application.
+  if (senderType === 'admin' && application.status === 'new') {
+    db.prepare(`UPDATE applications SET status = 'in_review', updated_at = datetime('now') WHERE id = ?`).run(req.params.id);
+  }
+
+  const created = db.prepare('SELECT * FROM application_messages WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json(created);
 });
 
 module.exports = router;

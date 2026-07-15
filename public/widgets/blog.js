@@ -59,6 +59,12 @@
       return;
     }
 
+    const resetToken = new URLSearchParams(window.location.search).get('reset');
+    if (resetToken) {
+      renderResetPasswordView(resetToken);
+      return;
+    }
+
     try {
       currentUser = await authFetch(apiBase, '/api/users/me');
     } catch (err) {
@@ -67,6 +73,45 @@
 
     render();
     window.addEventListener('hashchange', render);
+  }
+
+  function renderResetPasswordView(token) {
+    container.innerHTML = `
+      <div class="rescue-widget rw-blog-wrap">
+        <h3 style="margin-bottom:0.75rem;">Set a new password</h3>
+        <form id="rw-reset-form" class="rw-blog-inline-form">
+          <label>New password</label>
+          <input name="password" type="password" required placeholder="At least 8 characters" />
+          <label>Confirm new password</label>
+          <input name="confirm" type="password" required />
+          <div class="rw-error" id="rw-reset-error"></div>
+          <button type="submit">Set new password</button>
+        </form>
+      </div>
+    `;
+    const form = document.getElementById('rw-reset-form');
+    const errorEl = document.getElementById('rw-reset-error');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      if (form.password.value !== form.confirm.value) {
+        errorEl.textContent = "Passwords don't match.";
+        return;
+      }
+      try {
+        const result = await authFetch(apiBase, '/api/users/reset-password', {
+          method: 'POST',
+          body: JSON.stringify({ token, password: form.password.value }),
+        });
+        container.innerHTML = `
+          <div class="rescue-widget rw-blog-wrap">
+            <p class="rw-success">${escapeHtml(result.message)}</p>
+          </div>
+        `;
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
   }
 
   function render() {
@@ -150,7 +195,9 @@
           <input name="password" type="password" required />
           <div class="rw-error" id="rw-login-error"></div>
           <button type="submit">Log in</button>
+          <button type="button" class="rw-blog-link-btn" id="rw-forgot-password-btn" style="margin-left:0.5rem;">Forgot password?</button>
         </form>
+        <div id="rw-forgot-password-slot"></div>
       `;
       const form = document.getElementById('rw-login-form');
       const errorEl = document.getElementById('rw-login-error');
@@ -167,6 +214,39 @@
           errorEl.textContent = err.message;
         }
       });
+
+      document.getElementById('rw-forgot-password-btn').addEventListener('click', () => {
+        const fpSlot = document.getElementById('rw-forgot-password-slot');
+        if (fpSlot.dataset.open === '1') {
+          fpSlot.innerHTML = '';
+          fpSlot.removeAttribute('data-open');
+          return;
+        }
+        fpSlot.dataset.open = '1';
+        fpSlot.innerHTML = `
+          <form id="rw-forgot-form" class="rw-blog-inline-form">
+            <label>Email</label>
+            <input name="email" type="email" required placeholder="The email you signed up with" />
+            <div class="rw-error" id="rw-forgot-error"></div>
+            <button type="submit">Send reset link</button>
+          </form>
+        `;
+        const forgotForm = document.getElementById('rw-forgot-form');
+        const forgotError = document.getElementById('rw-forgot-error');
+        forgotForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          forgotError.textContent = '';
+          try {
+            const result = await authFetch(apiBase, '/api/users/forgot-password', {
+              method: 'POST',
+              body: JSON.stringify({ email: forgotForm.email.value.trim() }),
+            });
+            fpSlot.innerHTML = `<p class="rw-success">${escapeHtml(result.message)}</p>`;
+          } catch (err) {
+            forgotError.textContent = err.message;
+          }
+        });
+      });
     } else {
       slot.innerHTML = `
         <form id="rw-signup-form" class="rw-blog-inline-form">
@@ -174,6 +254,8 @@
           <input name="display_name" required placeholder="Shown on your posts and comments" />
           <label>Username</label>
           <input name="username" required placeholder="3-30 characters, no spaces" />
+          <label>Email</label>
+          <input name="email" type="email" required placeholder="Used only for password resets" />
           <label>Password</label>
           <input name="password" type="password" required placeholder="At least 8 characters" />
           <div class="rw-error" id="rw-signup-error"></div>
@@ -191,6 +273,7 @@
             body: JSON.stringify({
               display_name: form.display_name.value.trim(),
               username: form.username.value.trim(),
+              email: form.email.value.trim(),
               password: form.password.value,
             }),
           });
@@ -214,6 +297,8 @@
       <form id="rw-profile-form" class="rw-blog-inline-form">
         <label>Display name</label>
         <input name="display_name" value="${escapeHtml(currentUser.display_name)}" required />
+        <label>Email</label>
+        <input name="email" type="email" value="${escapeHtml(currentUser.email || '')}" placeholder="Used only for password resets" required />
         <label>Profile picture URL (optional)</label>
         <input name="avatar_url" value="${escapeHtml(currentUser.avatar_url || '')}" placeholder="https://..." />
         <div class="rw-error" id="rw-profile-error"></div>
@@ -230,6 +315,7 @@
           method: 'PATCH',
           body: JSON.stringify({
             display_name: form.display_name.value.trim(),
+            email: form.email.value.trim(),
             avatar_url: form.avatar_url.value.trim(),
           }),
         });

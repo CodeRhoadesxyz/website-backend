@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireUser, attachIdentity } = require('../middleware/auth');
+const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
 
@@ -107,6 +108,9 @@ router.delete('/:id', attachIdentity, (req, res) => {
   }
 
   db.prepare('DELETE FROM posts WHERE id = ?').run(req.params.id);
+  if (req.admin) {
+    logActivity(req.admin, 'posts', 'delete', post.id, post);
+  }
   res.json({ ok: true });
 });
 

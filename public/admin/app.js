@@ -3,6 +3,7 @@ const API_BASE = window.location.origin;
 const STATUS_LABELS = {
   new: 'New',
   in_review: 'In review',
+  needs_info: 'Needs info from applicant',
   approved: 'Approved',
   declined: 'Declined',
   archived: 'Archived',
@@ -16,56 +17,14 @@ const TAB_TITLES = {
   events: 'Events',
   announcements: 'News announcements',
   birds: 'Adoptable birds',
-  donations: 'Donations',
-  volunteers: 'Volunteers & fosters',
   community: 'Community',
   admins: 'Admin access',
-  'audit-log': 'Audit log',
-  maintenance: 'Maintenance mode',
+  fosters: 'Fosters',
+  wishlist: 'Wishlist',
+  testimonials: 'Testimonials',
+  faqs: 'FAQs',
+  store: 'Store',
 };
-
-const DONATION_METHOD_LABELS = {
-  cash: 'Cash',
-  check: 'Check',
-  online: 'Online',
-  in_kind: 'In-kind',
-  other: 'Other',
-};
-
-const VOLUNTEER_STATUS_LABELS = { active: 'Active', inactive: 'Inactive' };
-
-// Friendly labels for the free-form JSON fields stored in applications.data,
-// across all three form types (adoption/relinquishment/volunteer share some
-// field names, like fullName/email/phone). Anything submitted that isn't in
-// this map still displays fine — humanizeFieldName() turns camelCase into
-// Title Case as a fallback, so new form fields never show up unlabeled.
-const APPLICATION_FIELD_LABELS = {
-  fullName: 'Full Name',
-  email: 'Email',
-  phone: 'Phone',
-  address: 'Home Address',
-  whichBird: 'Bird of Interest',
-  homeType: 'Home Type',
-  birdExperience: 'Prior Bird Experience',
-  aboutHousehold: 'Household',
-  birdSpecies: 'Species',
-  birdAge: 'Age',
-  birdHealth: 'Health',
-  reasonForRelinquishment: 'Reason',
-  interests: 'Interests',
-  availability: 'Availability',
-  experience: 'Experience',
-};
-
-function humanizeFieldName(key) {
-  return key
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/^./, (c) => c.toUpperCase());
-}
-
-function applicationFieldLabel(key) {
-  return APPLICATION_FIELD_LABELS[key] || humanizeFieldName(key);
-}
 
 let currentTab = 'adoption';
 
@@ -124,6 +83,64 @@ function escapeHtml(str) {
   ));
 }
 
+// ---------- image upload (used by birds/events/announcements forms) ----------
+
+function imageFieldHtml(inputId, currentUrl, label) {
+  return `
+    <label>${label}</label>
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+      <input id="${inputId}" value="${escapeHtml(currentUrl || '')}" placeholder="https://... or upload a file" style="flex:1;" />
+      <button type="button" class="btn-secondary" id="${inputId}-upload-btn" style="white-space:nowrap;">Upload…</button>
+    </div>
+    <input type="file" id="${inputId}-file" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;" />
+    <div id="${inputId}-preview" style="margin-top:0.5rem;">
+      ${currentUrl ? `<img src="${escapeHtml(currentUrl)}" style="max-height:80px; border-radius:8px;" />` : ''}
+    </div>
+  `;
+}
+
+function attachImageUploadHandlers(inputId) {
+  const fileInput = document.getElementById(`${inputId}-file`);
+  const uploadBtn = document.getElementById(`${inputId}-upload-btn`);
+  const urlInput = document.getElementById(inputId);
+  const preview = document.getElementById(`${inputId}-preview`);
+
+  uploadBtn.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'Uploading…';
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      // Not using the api() helper here since it always sets
+      // Content-Type: application/json, which breaks a multipart upload —
+      // the browser needs to set its own boundary header for FormData.
+      const res = await fetch(`${window.location.origin}/api/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Upload failed.');
+
+      const fullUrl = `${window.location.origin}${data.url}`;
+      urlInput.value = fullUrl;
+      preview.innerHTML = `<img src="${fullUrl}" style="max-height:80px; border-radius:8px;" />`;
+    } catch (err) {
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = 'Upload…';
+      fileInput.value = '';
+    }
+  });
+}
+
 // ---------- boot ----------
 
 let currentAdminId = null;
@@ -154,69 +171,37 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-tab[data-tab]').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
   document.getElementById('view-title').textContent = TAB_TITLES[tab];
 
-  const homeView = document.getElementById('home-view');
-  const appView = document.getElementById('app-view');
-  const eventsView = document.getElementById('events-view');
-  const announcementsView = document.getElementById('announcements-view');
-  const birdsView = document.getElementById('birds-view');
-  const donationsView = document.getElementById('donations-view');
-  const volunteersView = document.getElementById('volunteers-view');
-  const communityView = document.getElementById('community-view');
-  const adminsView = document.getElementById('admins-view');
-  const auditLogView = document.getElementById('audit-log-view');
-  const maintenanceView = document.getElementById('maintenance-view');
+  const viewIds = [
+    'home-view', 'app-view', 'events-view', 'announcements-view', 'birds-view',
+    'community-view', 'admins-view', 'fosters-view', 'wishlist-view', 'testimonials-view', 'faqs-view', 'store-view',
+  ];
+  viewIds.forEach((id) => { document.getElementById(id).style.display = 'none'; });
 
-  homeView.style.display = 'none';
-  appView.style.display = 'none';
-  eventsView.style.display = 'none';
-  announcementsView.style.display = 'none';
-  birdsView.style.display = 'none';
-  donationsView.style.display = 'none';
-  volunteersView.style.display = 'none';
-  communityView.style.display = 'none';
-  adminsView.style.display = 'none';
-  auditLogView.style.display = 'none';
-  maintenanceView.style.display = 'none';
+  const showAndLoad = (id, loadFn) => {
+    document.getElementById(id).style.display = 'block';
+    loadFn();
+  };
 
-  if (tab === 'home') {
-    homeView.style.display = 'block';
-    loadHome();
-  } else if (tab === 'events') {
-    eventsView.style.display = 'block';
-    loadEvents();
-  } else if (tab === 'announcements') {
-    announcementsView.style.display = 'block';
-    loadAnnouncements();
-  } else if (tab === 'birds') {
-    birdsView.style.display = 'block';
-    loadBirds();
-  } else if (tab === 'donations') {
-    donationsView.style.display = 'block';
-    loadDonations();
-  } else if (tab === 'volunteers') {
-    volunteersView.style.display = 'block';
-    loadVolunteers();
-  } else if (tab === 'community') {
-    communityView.style.display = 'block';
-    loadCommunity();
-  } else if (tab === 'admins') {
-    adminsView.style.display = 'block';
-    loadAdmins();
-  } else if (tab === 'audit-log') {
-    auditLogView.style.display = 'block';
-    loadAuditLog();
-  } else if (tab === 'maintenance') {
-    maintenanceView.style.display = 'block';
-    loadMaintenance();
-  } else {
-    appView.style.display = 'block';
+  if (tab === 'home') showAndLoad('home-view', loadHome);
+  else if (tab === 'events') showAndLoad('events-view', loadEvents);
+  else if (tab === 'announcements') showAndLoad('announcements-view', loadAnnouncements);
+  else if (tab === 'birds') showAndLoad('birds-view', loadBirds);
+  else if (tab === 'community') showAndLoad('community-view', loadCommunity);
+  else if (tab === 'admins') showAndLoad('admins-view', loadAdmins);
+  else if (tab === 'fosters') showAndLoad('fosters-view', loadFosters);
+  else if (tab === 'wishlist') showAndLoad('wishlist-view', loadWishlist);
+  else if (tab === 'testimonials') showAndLoad('testimonials-view', loadTestimonials);
+  else if (tab === 'faqs') showAndLoad('faqs-view', loadFaqs);
+  else if (tab === 'store') showAndLoad('store-view', loadStore);
+  else {
+    document.getElementById('app-view').style.display = 'block';
     loadApplications(tab);
   }
 }
 
 // ---------- applications ----------
 
-async function loadApplications(type, statusFilter) {
+async function loadApplications(type, statusFilter, searchTerm) {
   const appView = document.getElementById('app-view');
   appView.innerHTML = `
     <div class="filters">
@@ -226,23 +211,75 @@ async function loadApplications(type, statusFilter) {
           `<option value="${val}" ${statusFilter === val ? 'selected' : ''}>${label}</option>`
         ).join('')}
       </select>
+      <input id="app-search" type="search" placeholder="Search name, email, phone…" value="${escapeHtml(searchTerm || '')}" style="max-width:260px;" />
+      <button class="btn-secondary" id="export-csv-btn">Export CSV</button>
     </div>
     <div id="app-table-wrap">Loading…</div>
   `;
 
   document.getElementById('status-filter').addEventListener('change', (e) => {
-    loadApplications(type, e.target.value || undefined);
+    loadApplications(type, e.target.value || undefined, searchTerm);
+  });
+
+  let searchDebounce;
+  document.getElementById('app-search').addEventListener('input', (e) => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => loadApplications(type, statusFilter, e.target.value || undefined), 350);
   });
 
   let params = `type=${type}`;
   if (statusFilter) params += `&status=${statusFilter}`;
+  if (searchTerm) params += `&search=${encodeURIComponent(searchTerm)}`;
 
   try {
     const apps = await api(`/api/applications?${params}`);
     renderApplicationsTable(apps);
+    document.getElementById('export-csv-btn').addEventListener('click', () => exportApplicationsCsv(apps, type));
   } catch (e) {
     document.getElementById('app-table-wrap').innerHTML = `<div class="empty-state">Could not load applications.</div>`;
   }
+}
+
+function downloadCsv(filename, rows) {
+  // Minimal, dependency-free CSV writer — quotes any field containing a
+  // comma, quote, or newline, and escapes embedded quotes by doubling them.
+  const escapeCell = (val) => {
+    const str = String(val ?? '');
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+  const csv = rows.map((row) => row.map(escapeCell).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportApplicationsCsv(apps, type) {
+  if (apps.length === 0) {
+    alert('Nothing to export.');
+    return;
+  }
+  // Union of every field seen across all rows' data blobs, so the CSV works
+  // even though adoption/relinquishment/volunteer forms have different fields.
+  const fieldSet = new Set();
+  apps.forEach((a) => Object.keys(a.data).forEach((k) => fieldSet.add(k)));
+  const fields = Array.from(fieldSet);
+
+  const header = ['id', 'status', 'submitted', ...fields, 'admin_notes'];
+  const rows = apps.map((a) => [
+    a.id,
+    STATUS_LABELS[a.status] || a.status,
+    fmtDate(a.created_at),
+    ...fields.map((f) => a.data[f] ?? ''),
+    a.admin_notes || '',
+  ]);
+
+  downloadCsv(`${type}-applications-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...rows]);
 }
 
 function renderApplicationsTable(apps) {
@@ -255,7 +292,7 @@ function renderApplicationsTable(apps) {
   wrap.innerHTML = `
     <table>
       <thead>
-        <tr><th>Submitted</th><th>Name</th><th>Email</th><th>Status</th><th>Claimed</th></tr>
+        <tr><th>Submitted</th><th>Name</th><th>Email</th><th>Status</th></tr>
       </thead>
       <tbody>
         ${apps.map((app) => `
@@ -264,11 +301,6 @@ function renderApplicationsTable(apps) {
             <td>${escapeHtml(app.data.fullName || '—')}</td>
             <td>${escapeHtml(app.data.email || '—')}</td>
             <td><span class="pill pill-${app.status}">${STATUS_LABELS[app.status]}</span></td>
-            <td>
-              ${app.claimed_by
-                ? `<span class="pill ${app.claimed_by === currentAdminId ? 'pill-approved' : 'pill-in_review'}">${app.claimed_by === currentAdminId ? 'You' : escapeHtml(app.claimed_by_username || 'Claimed')}</span>`
-                : `<button class="btn-secondary" data-quick-claim="${app.id}" style="font-size:0.78rem; padding:0.3rem 0.65rem;">Claim</button>`}
-            </td>
           </tr>
         `).join('')}
       </tbody>
@@ -278,48 +310,22 @@ function renderApplicationsTable(apps) {
   wrap.querySelectorAll('tr[data-id]').forEach((row) => {
     row.addEventListener('click', () => openApplicationModal(row.dataset.id));
   });
-
-  wrap.querySelectorAll('[data-quick-claim]').forEach((btn) =>
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      try {
-        await api(`/api/applications/${btn.dataset.quickClaim}/claim`, { method: 'POST' });
-        toast('Application claimed.');
-        loadApplications(currentTab);
-      } catch (err) {
-        alert(err.message);
-        loadApplications(currentTab);
-      }
-    })
-  );
 }
 
 async function openApplicationModal(id) {
   const app = await api(`/api/applications/${id}`);
   const fields = Object.entries(app.data)
-    .map(([key, value]) => `<div style="margin-bottom:0.5rem;"><strong>${escapeHtml(applicationFieldLabel(key))}:</strong> ${escapeHtml(value)}</div>`)
+    .map(([key, value]) => `<div style="margin-bottom:0.5rem;"><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</div>`)
     .join('');
 
   document.getElementById('modal-root').innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal">
+      <div class="modal" style="max-width:640px;">
         <div class="modal-header">
           <h3>Application #${app.id}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
         </div>
         <p class="mono" style="color:var(--muted); font-size:0.8rem;">Submitted ${fmtDate(app.created_at)}</p>
-
-        <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:0.85rem 1rem;">
-          <span style="font-size:0.9rem;">
-            ${app.claimed_by
-              ? `<strong>${app.claimed_by === currentAdminId ? 'Claimed by you' : `Claimed by ${escapeHtml(app.claimed_by_username || 'another admin')}`}</strong>${app.claimed_at ? ` <span class="mono" style="color:var(--muted); font-size:0.78rem;">since ${fmtDate(app.claimed_at)}</span>` : ''}`
-              : `<span style="color:var(--muted);">Not claimed — anyone could reach out to this applicant.</span>`}
-          </span>
-          ${app.claimed_by
-            ? `<button class="btn-secondary" id="unclaim-btn" style="font-size:0.82rem;">Unclaim</button>`
-            : `<button class="btn-primary" id="claim-btn" style="font-size:0.82rem;">Claim</button>`}
-        </div>
-
         <div class="card">${fields}</div>
 
         <label for="status-select">Status</label>
@@ -332,13 +338,26 @@ async function openApplicationModal(id) {
         <label for="notes-field">Internal notes</label>
         <textarea id="notes-field" rows="3">${escapeHtml(app.admin_notes || '')}</textarea>
 
-        ${app.type === 'volunteer' ? `
-          <button class="btn-secondary" id="add-as-volunteer-btn" style="width:100%; margin-top:0.75rem;">+ Add to volunteer roster</button>
-        ` : ''}
-
-        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
+        <div style="display:flex; justify-content:space-between; margin-top:1.25rem; margin-bottom:1.5rem;">
           <button class="btn-danger" id="delete-app">Delete</button>
           <button class="btn-primary" id="save-app">Save changes</button>
+        </div>
+
+        <div style="border-top:1px solid var(--line); padding-top:1.25rem;">
+          <h4 style="margin-bottom:0.5rem;">Conversation</h4>
+          ${app.user_id
+            ? ''
+            : `<p style="color:var(--muted); font-size:0.82rem; margin-bottom:0.75rem;">
+                 This application wasn't submitted while signed in, so it isn't linked to an
+                 account — messages sent here won't be visible to the applicant in "My
+                 Applications." They'll still need to be reached by email/phone directly.
+               </p>`}
+          <div id="app-messages-wrap">Loading conversation…</div>
+          <form id="app-message-form" class="mt-3" style="margin-top:0.75rem;">
+            <textarea id="app-message-input" rows="2" placeholder="Write a message…"></textarea>
+            <div class="error-text" id="app-message-error"></div>
+            <button type="submit" class="btn-secondary" style="margin-top:0.5rem;">Send</button>
+          </form>
         </div>
       </div>
     </div>
@@ -348,51 +367,6 @@ async function openApplicationModal(id) {
   document.getElementById('modal-backdrop').addEventListener('click', (e) => {
     if (e.target.id === 'modal-backdrop') closeModal();
   });
-
-  if (app.claimed_by) {
-    document.getElementById('unclaim-btn').addEventListener('click', async () => {
-      try {
-        await api(`/api/applications/${id}/unclaim`, { method: 'POST' });
-        toast('Claim released.');
-        openApplicationModal(id);
-      } catch (err) {
-        alert(`Could not unclaim: ${err.message}`);
-      }
-    });
-  } else {
-    document.getElementById('claim-btn').addEventListener('click', async () => {
-      try {
-        await api(`/api/applications/${id}/claim`, { method: 'POST' });
-        toast('Application claimed.');
-        openApplicationModal(id);
-      } catch (err) {
-        alert(err.message);
-        openApplicationModal(id);
-      }
-    });
-  }
-
-  if (app.type === 'volunteer') {
-    document.getElementById('add-as-volunteer-btn').addEventListener('click', async () => {
-      try {
-        await api('/api/volunteers', {
-          method: 'POST',
-          body: JSON.stringify({
-            full_name: app.data.fullName || '',
-            email: app.data.email || '',
-            phone: app.data.phone || '',
-            skills: app.data.interests || '',
-            application_id: app.id,
-          }),
-        });
-        toast('Added to volunteer roster.');
-        closeModal();
-        switchTab('volunteers');
-      } catch (err) {
-        alert(`Could not add volunteer: ${err.message}`);
-      }
-    });
-  }
 
   document.getElementById('save-app').addEventListener('click', async () => {
     const status = document.getElementById('status-select').value;
@@ -418,6 +392,53 @@ async function openApplicationModal(id) {
       alert(`Could not delete: ${err.message}`);
     }
   });
+
+  loadApplicationMessages(id);
+
+  document.getElementById('app-message-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('app-message-input');
+    const errorEl = document.getElementById('app-message-error');
+    errorEl.textContent = '';
+    if (!input.value.trim()) return;
+
+    try {
+      await api(`/api/applications/${id}/messages`, { method: 'POST', body: JSON.stringify({ body: input.value.trim() }) });
+      input.value = '';
+      loadApplicationMessages(id);
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  });
+}
+
+async function loadApplicationMessages(id) {
+  const wrap = document.getElementById('app-messages-wrap');
+  if (!wrap) return; // modal may have been closed already
+
+  try {
+    const messages = await api(`/api/applications/${id}/messages`);
+    if (messages.length === 0) {
+      wrap.innerHTML = `<p style="color:var(--muted); font-size:0.85rem;">No messages yet — say hello.</p>`;
+      return;
+    }
+    wrap.innerHTML = `
+      <div style="max-height:240px; overflow-y:auto; display:flex; flex-direction:column; gap:0.6rem;">
+        ${messages.map((m) => `
+          <div style="align-self:${m.sender_type === 'admin' ? 'flex-end' : 'flex-start'}; max-width:80%;">
+            <div class="card" style="margin-bottom:0.15rem; padding:0.6rem 0.85rem; ${m.sender_type === 'admin' ? 'background:var(--canopy); color:#10160f;' : ''}">
+              ${escapeHtml(m.body)}
+            </div>
+            <div class="mono" style="font-size:0.72rem; color:var(--muted); text-align:${m.sender_type === 'admin' ? 'right' : 'left'};">
+              ${escapeHtml(m.sender_name)} · ${fmtDate(m.created_at)}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (err) {
+    wrap.innerHTML = `<p style="color:var(--danger); font-size:0.85rem;">Could not load the conversation.</p>`;
+  }
 }
 
 // ---------- events ----------
@@ -471,7 +492,7 @@ function renderEventsTable(events) {
     btn.addEventListener('click', () => openEventModal(events.find((e) => e.id == btn.dataset.edit)))
   );
   wrap.querySelectorAll('[data-rsvp]').forEach((btn) =>
-    btn.addEventListener('click', () => openRsvpModal(btn.dataset.rsvp))
+    btn.addEventListener('click', () => openRsvpModal(btn.dataset.rsvp, events.find((e) => e.id == btn.dataset.rsvp)?.title || 'event'))
   );
 }
 
@@ -482,7 +503,7 @@ function openEventModal(event) {
       <div class="modal">
         <div class="modal-header">
           <h3>${isEdit ? 'Edit event' : 'New event'}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
         </div>
         <div class="field-grid">
           <div><label>Title</label><input id="ev-title" value="${escapeHtml(event?.title || '')}" /></div>
@@ -497,7 +518,7 @@ function openEventModal(event) {
               <option value="0" ${event?.is_published === 0 ? 'selected' : ''}>Draft</option>
             </select>
           </div>
-          <div><label>Image URL (optional)</label><input id="ev-image" value="${escapeHtml(event?.image_url || '')}" /></div>
+          <div>${imageFieldHtml('ev-image', event?.image_url, 'Image (optional)')}</div>
         </div>
         <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
           ${isEdit ? `<button class="btn-danger" id="delete-event">Delete</button>` : `<span></span>`}
@@ -511,6 +532,7 @@ function openEventModal(event) {
   document.getElementById('modal-backdrop').addEventListener('click', (e) => {
     if (e.target.id === 'modal-backdrop') closeModal();
   });
+  attachImageUploadHandlers('ev-image');
 
   document.getElementById('save-event').addEventListener('click', async () => {
     const payload = {
@@ -559,18 +581,19 @@ function openEventModal(event) {
   }
 }
 
-async function openRsvpModal(eventId) {
+async function openRsvpModal(eventId, eventTitle) {
   const rsvps = await api(`/api/events/${eventId}/rsvps`);
   document.getElementById('modal-root').innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal">
         <div class="modal-header">
           <h3>RSVPs</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
         </div>
         ${rsvps.length === 0
           ? `<div class="empty-state">No RSVPs yet.</div>`
-          : `<table>
+          : `<div style="margin-bottom:0.75rem; text-align:right;"><button class="btn-secondary" id="export-rsvp-csv-btn">Export CSV</button></div>
+            <table>
               <thead><tr><th>Name</th><th>Email</th><th>Guests</th><th>Submitted</th></tr></thead>
               <tbody>
                 ${rsvps.map((r) => `
@@ -591,6 +614,16 @@ async function openRsvpModal(eventId) {
   document.getElementById('modal-backdrop').addEventListener('click', (e) => {
     if (e.target.id === 'modal-backdrop') closeModal();
   });
+
+  const exportBtn = document.getElementById('export-rsvp-csv-btn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      const header = ['name', 'email', 'phone', 'guests', 'notes', 'submitted'];
+      const rows = rsvps.map((r) => [r.name, r.email, r.phone || '', r.guests, r.notes || '', fmtDate(r.created_at)]);
+      const safeTitle = eventTitle.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      downloadCsv(`rsvps-${safeTitle}-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...rows]);
+    });
+  }
 }
 
 // ---------- announcements ----------
@@ -634,7 +667,10 @@ function renderAnnouncementsTable(items) {
               <td class="mono">${fmtDate(a.created_at)}</td>
               <td>${escapeHtml(a.title)}${i === liveIndex ? ' <span class="pill pill-approved">Live on site</span>' : ''}</td>
               <td><span class="pill ${statusClass}">${statusLabel}</span></td>
-              <td style="white-space:nowrap;"><button class="btn-secondary" data-edit="${a.id}">Edit</button></td>
+              <td style="white-space:nowrap;">
+                <button class="btn-secondary" data-edit="${a.id}" style="margin-right:0.3rem;">Edit</button>
+                <button class="btn-secondary" data-ann-caption="${a.id}">Caption</button>
+              </td>
             </tr>
           `;
         }).join('')}
@@ -650,6 +686,39 @@ function renderAnnouncementsTable(items) {
   wrap.querySelectorAll('[data-edit]').forEach((btn) =>
     btn.addEventListener('click', () => openAnnouncementModal(items.find((a) => a.id == btn.dataset.edit)))
   );
+  wrap.querySelectorAll('[data-ann-caption]').forEach((btn) =>
+    btn.addEventListener('click', () => openAnnouncementCaptionModal(items.find((a) => a.id == btn.dataset.annCaption)))
+  );
+}
+
+function openAnnouncementCaptionModal(announcement) {
+  const caption = `📢 ${announcement.title}\n\n${announcement.message}${announcement.link_url ? `\n\n${announcement.link_text || 'Learn more'}: ${announcement.link_url}` : ''}\n\n#ParrotRescue #HeartAndSoulParrotRescue`;
+
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Social caption</h3>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
+        </div>
+        <textarea id="ann-caption-text" rows="6" readonly>${escapeHtml(caption)}</textarea>
+        <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+          <button class="btn-primary" id="copy-ann-caption-btn">Copy to clipboard</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'modal-backdrop') closeModal(); });
+  document.getElementById('copy-ann-caption-btn').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(caption);
+      toast('Caption copied!');
+    } catch (err) {
+      document.getElementById('ann-caption-text').select();
+      alert('Could not auto-copy — text is selected, use Ctrl/Cmd+C.');
+    }
+  });
 }
 
 function openAnnouncementModal(announcement) {
@@ -659,14 +728,13 @@ function openAnnouncementModal(announcement) {
       <div class="modal">
         <div class="modal-header">
           <h3>${isEdit ? 'Edit announcement' : 'New announcement'}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
         </div>
         <label>Title</label>
         <input id="an-title" value="${escapeHtml(announcement?.title || '')}" placeholder="e.g. We're at capacity — foster homes needed" />
         <label>Message</label>
         <textarea id="an-message" rows="3" placeholder="Keep it short — this shows as a slim banner on the homepage.">${escapeHtml(announcement?.message || '')}</textarea>
-        <label>Image URL (optional)</label>
-        <input id="an-image" value="${escapeHtml(announcement?.image_url || '')}" placeholder="https://..." />
+        ${imageFieldHtml('an-image', announcement?.image_url, 'Image (optional)')}
         <div class="field-grid">
           <div class="half"><label>Link URL (optional)</label><input id="an-link-url" value="${escapeHtml(announcement?.link_url || '')}" placeholder="https://..." /></div>
           <div class="half"><label>Link text (optional)</label><input id="an-link-text" value="${escapeHtml(announcement?.link_text || '')}" placeholder="e.g. Learn more" /></div>
@@ -689,6 +757,7 @@ function openAnnouncementModal(announcement) {
   document.getElementById('modal-backdrop').addEventListener('click', (e) => {
     if (e.target.id === 'modal-backdrop') closeModal();
   });
+  attachImageUploadHandlers('an-image');
 
   document.getElementById('save-announcement').addEventListener('click', async () => {
     const payload = {
@@ -777,7 +846,12 @@ function renderBirdsTable(birds) {
             <td>${escapeHtml(b.species)}</td>
             <td><span class="pill ${b.status === 'available' ? 'pill-approved' : b.status === 'pending' ? 'pill-new' : 'pill-archived'}">${BIRD_STATUS_LABELS[b.status]}</span></td>
             <td><span class="pill ${b.is_published ? 'pill-approved' : 'pill-archived'}">${b.is_published ? 'Published' : 'Draft'}</span></td>
-            <td><button class="btn-secondary" data-edit="${b.id}">Edit</button></td>
+            <td style="white-space:nowrap;">
+              <button class="btn-secondary" data-edit="${b.id}" style="margin-right:0.3rem;">Edit</button>
+              <button class="btn-secondary" data-waitlist="${b.id}" style="margin-right:0.3rem;">Waitlist</button>
+              <button class="btn-secondary" data-print="${b.id}" style="margin-right:0.3rem;">Print packet</button>
+              <button class="btn-secondary" data-caption="${b.id}">Caption</button>
+            </td>
           </tr>
         `).join('')}
       </tbody>
@@ -786,6 +860,15 @@ function renderBirdsTable(birds) {
 
   wrap.querySelectorAll('[data-edit]').forEach((btn) =>
     btn.addEventListener('click', () => openBirdModal(birds.find((b) => b.id == btn.dataset.edit)))
+  );
+  wrap.querySelectorAll('[data-waitlist]').forEach((btn) =>
+    btn.addEventListener('click', () => openBirdWaitlistModal(birds.find((b) => b.id == btn.dataset.waitlist)))
+  );
+  wrap.querySelectorAll('[data-print]').forEach((btn) =>
+    btn.addEventListener('click', () => printBirdPacket(birds.find((b) => b.id == btn.dataset.print)))
+  );
+  wrap.querySelectorAll('[data-caption]').forEach((btn) =>
+    btn.addEventListener('click', () => openCaptionModal(birds.find((b) => b.id == btn.dataset.caption)))
   );
 }
 
@@ -796,7 +879,7 @@ function openBirdModal(bird) {
       <div class="modal">
         <div class="modal-header">
           <h3>${isEdit ? 'Edit bird' : 'New bird'}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
         </div>
         <div class="field-grid">
           <div class="half"><label>Name</label><input id="b-name" value="${escapeHtml(bird?.name || '')}" /></div>
@@ -804,7 +887,7 @@ function openBirdModal(bird) {
           <div class="half"><label>Age (optional)</label><input id="b-age" value="${escapeHtml(bird?.age || '')}" placeholder="e.g. 2 years" /></div>
           <div class="half"><label>Sex (optional)</label><input id="b-sex" value="${escapeHtml(bird?.sex || '')}" placeholder="e.g. Male" /></div>
           <div><label>Description</label><textarea id="b-desc" rows="4">${escapeHtml(bird?.description || '')}</textarea></div>
-          <div><label>Photo URL (optional)</label><input id="b-photo" value="${escapeHtml(bird?.photo_url || '')}" placeholder="https://..." /></div>
+          <div>${imageFieldHtml('b-photo', bird?.photo_url, 'Photo (optional)')}</div>
           <div class="half"><label>Status</label>
             <select id="b-status">
               <option value="available" ${(!bird || bird.status === 'available') ? 'selected' : ''}>Available</option>
@@ -818,6 +901,7 @@ function openBirdModal(bird) {
               <option value="0" ${bird?.is_published === 0 ? 'selected' : ''}>Draft</option>
             </select>
           </div>
+          <div><label>Sponsor link (optional)</label><input id="b-sponsor" value="${escapeHtml(bird?.sponsor_url || '')}" placeholder="Your PayPal/Stripe/donation link for sponsoring this bird" /></div>
         </div>
         <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
           ${isEdit ? `<button class="btn-danger" id="delete-bird">Delete</button>` : `<span></span>`}
@@ -831,6 +915,7 @@ function openBirdModal(bird) {
   document.getElementById('modal-backdrop').addEventListener('click', (e) => {
     if (e.target.id === 'modal-backdrop') closeModal();
   });
+  attachImageUploadHandlers('b-photo');
 
   document.getElementById('save-bird').addEventListener('click', async () => {
     const payload = {
@@ -842,6 +927,7 @@ function openBirdModal(bird) {
       photo_url: document.getElementById('b-photo').value.trim(),
       status: document.getElementById('b-status').value,
       is_published: document.getElementById('b-published').value === '1',
+      sponsor_url: document.getElementById('b-sponsor').value.trim(),
     };
 
     if (!payload.name || !payload.species) {
@@ -877,6 +963,111 @@ function openBirdModal(bird) {
       }
     });
   }
+}
+
+// ---------- bird waitlist / print packet / social caption ----------
+
+async function openBirdWaitlistModal(bird) {
+  const entries = await api(`/api/waitlist?bird_id=${bird.id}`);
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Waitlist · ${escapeHtml(bird.name)}</h3>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
+        </div>
+        ${entries.length === 0 ? `<div class="empty-state">No one on the waitlist for this bird yet.</div>` : `
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Joined</th><th></th></tr></thead>
+            <tbody>
+              ${entries.map((e) => `
+                <tr>
+                  <td>${escapeHtml(e.name)}</td>
+                  <td>${escapeHtml(e.email)}</td>
+                  <td>${escapeHtml(e.phone || '—')}</td>
+                  <td class="mono">${fmtDate(e.created_at)}</td>
+                  <td><button class="btn-danger" data-remove-waitlist="${e.id}" style="font-size:0.8rem; padding:0.35rem 0.7rem;">Remove</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `}
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'modal-backdrop') closeModal(); });
+  document.querySelectorAll('[data-remove-waitlist]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      try {
+        await api(`/api/waitlist/${btn.dataset.removeWaitlist}`, { method: 'DELETE' });
+        closeModal();
+        openBirdWaitlistModal(bird);
+      } catch (err) {
+        alert(`Could not remove: ${err.message}`);
+      }
+    })
+  );
+}
+
+function printBirdPacket(bird) {
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${escapeHtml(bird.name)} — Adoption Packet</title>
+      <style>
+        body { font-family: Georgia, serif; max-width: 640px; margin: 2rem auto; padding: 0 1.5rem; color: #222; }
+        h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+        .meta { color: #666; margin-bottom: 1.5rem; }
+        img { width: 100%; max-height: 320px; object-fit: cover; border-radius: 8px; margin-bottom: 1.5rem; }
+        h2 { font-size: 1.1rem; border-bottom: 1px solid #ccc; padding-bottom: 0.3rem; margin-top: 1.5rem; }
+        footer { margin-top: 2.5rem; color: #888; font-size: 0.85rem; }
+      </style>
+    </head>
+    <body>
+      <h1>${escapeHtml(bird.name)}</h1>
+      <div class="meta">${escapeHtml(bird.species)}${bird.age ? ' · ' + escapeHtml(bird.age) : ''}${bird.sex ? ' · ' + escapeHtml(bird.sex) : ''}</div>
+      ${bird.photo_url ? `<img src="${escapeHtml(bird.photo_url)}" alt="${escapeHtml(bird.name)}" />` : ''}
+      <h2>About ${escapeHtml(bird.name)}</h2>
+      <p>${escapeHtml(bird.description || 'No description on file yet.')}</p>
+      <footer>Heart &amp; Soul Parrot Rescue — printed ${new Date().toLocaleDateString()}</footer>
+      <script>window.onload = () => window.print();</script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+function openCaptionModal(bird) {
+  const caption = `Meet ${bird.name}! 🦜 A ${bird.age ? bird.age + ' old ' : ''}${bird.species}${bird.sex ? ` (${bird.sex})` : ''} looking for a loving forever home.${bird.description ? ' ' + bird.description : ''} Interested in adopting? Visit our website to apply! #AdoptDontShop #ParrotRescue #${bird.species.replace(/[^a-zA-Z0-9]/g, '')}`;
+
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Social caption · ${escapeHtml(bird.name)}</h3>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
+        </div>
+        <textarea id="caption-text" rows="6" readonly>${escapeHtml(caption)}</textarea>
+        <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+          <button class="btn-primary" id="copy-caption-btn">Copy to clipboard</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'modal-backdrop') closeModal(); });
+  document.getElementById('copy-caption-btn').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(caption);
+      toast('Caption copied!');
+    } catch (err) {
+      document.getElementById('caption-text').select();
+      alert('Could not auto-copy — text is selected, use Ctrl/Cmd+C.');
+    }
+  });
 }
 
 // ---------- community moderation ----------
@@ -955,7 +1146,7 @@ async function openPostModeration(id) {
       <div class="modal">
         <div class="modal-header">
           <h3>${escapeHtml(post.title)}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
         </div>
         <p class="mono" style="color:var(--muted); font-size:0.8rem;">By ${escapeHtml(post.author_name)} · ${fmtDate(post.created_at)}</p>
         <div class="card" style="white-space:pre-wrap;">${escapeHtml(post.body)}</div>
@@ -1023,13 +1214,14 @@ function renderCommunityUsers(users) {
       <option value="Website Developer">
     </datalist>
     <table>
-      <thead><tr><th>Joined</th><th>Name</th><th>Username</th><th>Role</th><th>Posts</th><th>Comments</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Joined</th><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Posts</th><th>Comments</th><th>Status</th><th></th></tr></thead>
       <tbody>
         ${users.map((u) => `
           <tr>
             <td class="mono">${fmtDate(u.created_at)}</td>
             <td>${escapeHtml(u.display_name)}</td>
             <td class="mono">${escapeHtml(u.username)}</td>
+            <td class="mono" style="font-size:0.82rem;">${escapeHtml(u.email || '—')}</td>
             <td>
               <div style="display:flex; gap:0.3rem;">
                 <input list="role-suggestions" data-role-input="${u.id}" value="${escapeHtml(u.role || '')}" placeholder="e.g. Founder" style="min-width:130px;" />
@@ -1040,7 +1232,7 @@ function renderCommunityUsers(users) {
             <td>${u.comment_count}</td>
             <td><span class="pill ${u.is_banned ? 'pill-declined' : 'pill-approved'}">${u.is_banned ? 'Suspended' : 'Active'}</span></td>
             <td style="white-space:nowrap;">
-              <button class="btn-secondary" data-toggle-ban="${u.id}" data-banned="${u.is_banned ? 'true' : 'false'}" style="margin-right:0.4rem;">${u.is_banned ? 'Unsuspend' : 'Suspend'}</button>
+              <button class="btn-secondary" data-toggle-ban="${u.id}" data-banned="${u.is_banned}" style="margin-right:0.4rem;">${u.is_banned ? 'Unsuspend' : 'Suspend'}</button>
               <button class="btn-danger" data-delete-user="${u.id}">Delete</button>
             </td>
           </tr>
@@ -1110,8 +1302,7 @@ function renderHomeStats(stats) {
     { key: 'adoption', label: 'Adoption applications', total: stats.adoption.total, sub: `${stats.adoption.new} new` },
     { key: 'relinquishment', label: 'Relinquishment applications', total: stats.relinquishment.total, sub: `${stats.relinquishment.new} new` },
     { key: 'events', label: 'Event RSVPs', total: stats.rsvps.total, sub: 'across all events' },
-    { key: 'donations', label: 'Donations this month', total: `$${stats.donations.this_month.toFixed(2)}`, sub: `$${stats.donations.all_time.toFixed(2)} all-time` },
-    { key: 'volunteers', label: 'Active volunteers', total: stats.volunteers.active, sub: `${stats.volunteers.active_fosters} active fosters` },
+    { key: 'birds', label: 'Birds in our care', total: stats.birds.total, sub: `${stats.birds.available} available · ${stats.birds.pending} pending` },
   ];
 
   wrap.innerHTML = `
@@ -1124,7 +1315,21 @@ function renderHomeStats(stats) {
         </div>
       `).join('')}
     </div>
-    <p style="color:var(--muted); font-size:0.85rem;">Click a card to jump to that section.</p>
+    <div class="card">
+      <h3 style="margin-bottom:0.75rem;">Adoption performance</h3>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:1.25rem;">
+        <div>
+          <div style="font-size:1.6rem; font-weight:700; font-family:'Fraunces', serif; color:var(--canopy);">${stats.birds.adoptionRate}%</div>
+          <div class="mono" style="color:var(--muted); font-size:0.8rem;">Adoption rate (${stats.birds.adopted} of ${stats.birds.total} birds)</div>
+        </div>
+        <div>
+          <div style="font-size:1.6rem; font-weight:700; font-family:'Fraunces', serif; color:var(--canopy);">${stats.birds.avgDaysToAdoption != null ? stats.birds.avgDaysToAdoption : '—'}</div>
+          <div class="mono" style="color:var(--muted); font-size:0.8rem;">Avg. days to adoption</div>
+        </div>
+      </div>
+      <p style="color:var(--muted); font-size:0.78rem; margin-top:0.75rem;">Handy for grant applications — "we've placed X birds at an average of Y days" type figures.</p>
+    </div>
+    <p style="color:var(--muted); font-size:0.85rem; margin-top:1rem;">Click a card to jump to that section.</p>
   `;
 
   wrap.querySelectorAll('[data-goto]').forEach((card) =>
@@ -1156,15 +1361,19 @@ function renderAdminsTable(admins) {
   const wrap = document.getElementById('admins-table-wrap');
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Created</th><th>Username</th><th>Email</th><th></th></tr></thead>
+      <thead><tr><th>Created</th><th>Username</th><th></th></tr></thead>
       <tbody>
         ${admins.map((a) => `
           <tr>
             <td class="mono">${fmtDate(a.created_at)}</td>
-            <td>${escapeHtml(a.username)}${a.id === currentAdminId ? ' <span class="pill pill-approved">You</span>' : ''}</td>
-            <td class="mono" style="font-size:0.85rem; color:${a.email ? 'var(--text)' : 'var(--muted)'};">${escapeHtml(a.email || 'Not set')}</td>
+            <td>
+              ${escapeHtml(a.username)}
+              ${a.id === currentAdminId ? ' <span class="pill pill-approved">You</span>' : ''}
+              ${a.is_super_admin ? ' <span class="pill pill-new">Super admin</span>' : ''}
+            </td>
             <td style="white-space:nowrap;">
-              <button class="btn-secondary" data-edit-admin="${a.id}" data-username="${escapeHtml(a.username)}" data-email="${escapeHtml(a.email || '')}" style="margin-right:0.4rem;">Edit</button>
+              <button class="btn-secondary" data-edit-admin="${a.id}" data-username="${escapeHtml(a.username)}" style="margin-right:0.4rem;">Edit</button>
+              ${a.is_super_admin ? '' : `<button class="btn-secondary" data-undo-actions="${a.id}" data-username="${escapeHtml(a.username)}" style="margin-right:0.4rem;">Undo actions</button>`}
               ${a.id === currentAdminId
                 ? `<span style="color:var(--muted); font-size:0.82rem;">Can't remove your own account</span>`
                 : `<button class="btn-danger" data-delete-admin="${a.id}" data-username="${escapeHtml(a.username)}">Remove</button>`}
@@ -1175,12 +1384,15 @@ function renderAdminsTable(admins) {
     </table>
     <p style="color:var(--muted); font-size:0.82rem; margin-top:0.75rem;">
       Anyone added here can sign in to this entire admin panel — applications, events, community moderation, everything. Only add people you trust with full access.
-      Email is used for password-reset links, so it's worth keeping current.
     </p>
   `;
 
   wrap.querySelectorAll('[data-edit-admin]').forEach((btn) =>
-    btn.addEventListener('click', () => openEditAdminModal(btn.dataset.editAdmin, btn.dataset.username, btn.dataset.email))
+    btn.addEventListener('click', () => openEditAdminModal(btn.dataset.editAdmin, btn.dataset.username))
+  );
+
+  wrap.querySelectorAll('[data-undo-actions]').forEach((btn) =>
+    btn.addEventListener('click', () => openUndoActionsModal(btn.dataset.undoActions, btn.dataset.username))
   );
 
   wrap.querySelectorAll('[data-delete-admin]').forEach((btn) =>
@@ -1197,18 +1409,107 @@ function renderAdminsTable(admins) {
   );
 }
 
-function openEditAdminModal(id, currentUsername, currentEmail) {
+async function openUndoActionsModal(adminId, username) {
+  let entries;
+  try {
+    entries = await api(`/api/admin-users/${adminId}/activity`);
+  } catch (err) {
+    alert(`Could not load activity: ${err.message}`);
+    return;
+  }
+
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal" style="max-width:640px;">
+        <div class="modal-header">
+          <h3>Undo actions · ${escapeHtml(username)}</h3>
+          <button class="btn-ghost" id="modal-close">✕</button>
+        </div>
+        ${entries.length === 0 ? `
+          <div class="empty-state">No recent actions to undo for this admin.</div>
+        ` : `
+          <p style="color:var(--muted); font-size:0.85rem; margin-bottom:0.75rem;">
+            Select one or more actions below, then undo them together. Each is reversed
+            independently — if one fails (e.g. the row was already deleted some other way), the
+            rest still go through.
+          </p>
+          <div style="margin-bottom:0.75rem;">
+            <label style="display:flex; align-items:center; gap:0.4rem; font-weight:600;">
+              <input type="checkbox" id="select-all-actions" style="width:auto;" /> Select all
+            </label>
+          </div>
+          <div id="undo-actions-list" style="max-height:360px; overflow-y:auto;">
+            ${entries.map((e) => `
+              <label class="card" style="display:flex; align-items:flex-start; gap:0.6rem; cursor:pointer; padding:0.85rem 1rem;">
+                <input type="checkbox" class="undo-action-checkbox" value="${e.id}" style="width:auto; margin-top:0.2rem;" />
+                <span>
+                  <span class="pill ${e.action === 'delete' ? 'pill-declined' : e.action === 'create' ? 'pill-approved' : 'pill-new'}">${e.action}</span>
+                  <span style="margin-left:0.5rem;">${escapeHtml(e.summary)}</span>
+                  <div class="mono" style="color:var(--muted); font-size:0.78rem; margin-top:0.2rem;">${escapeHtml(e.createdAt)}</div>
+                </span>
+              </label>
+            `).join('')}
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.25rem;">
+            <span class="mono" id="selected-count" style="color:var(--muted); font-size:0.82rem;">0 selected</span>
+            <button class="btn-primary" id="undo-selected-btn" disabled>Undo selected</button>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'modal-backdrop') closeModal(); });
+
+  if (entries.length === 0) return;
+
+  const checkboxes = () => Array.from(document.querySelectorAll('.undo-action-checkbox'));
+  const updateCount = () => {
+    const count = checkboxes().filter((c) => c.checked).length;
+    document.getElementById('selected-count').textContent = `${count} selected`;
+    document.getElementById('undo-selected-btn').disabled = count === 0;
+  };
+
+  document.getElementById('select-all-actions').addEventListener('change', (e) => {
+    checkboxes().forEach((c) => { c.checked = e.target.checked; });
+    updateCount();
+  });
+  checkboxes().forEach((c) => c.addEventListener('change', updateCount));
+
+  document.getElementById('undo-selected-btn').addEventListener('click', async () => {
+    const selectedIds = checkboxes().filter((c) => c.checked).map((c) => Number(c.value));
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Undo ${selectedIds.length} action(s) by ${username}?`)) return;
+
+    try {
+      const result = await api(`/api/admin-users/${adminId}/activity/undo`, {
+        method: 'POST',
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+      const succeeded = result.results.filter((r) => r.ok).length;
+      const failed = result.results.filter((r) => !r.ok);
+      toast(`Undid ${succeeded} of ${selectedIds.length} action(s).`);
+      if (failed.length > 0) {
+        alert(`${failed.length} action(s) couldn't be undone:\n` + failed.map((f) => `#${f.id}: ${f.error}`).join('\n'));
+      }
+      closeModal();
+    } catch (err) {
+      alert(`Undo failed: ${err.message}`);
+    }
+  });
+}
+
+function openEditAdminModal(id, currentUsername) {
   document.getElementById('modal-root').innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal">
         <div class="modal-header">
           <h3>Edit admin</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
         </div>
         <label>Username</label>
         <input id="edit-admin-username" value="${escapeHtml(currentUsername)}" />
-        <label>Email</label>
-        <input id="edit-admin-email" type="email" value="${escapeHtml(currentEmail || '')}" placeholder="Used for password-reset links" />
         <label>New password (optional)</label>
         <input id="edit-admin-password" type="password" placeholder="Leave blank to keep current password" />
         <div class="error-text" id="edit-admin-error"></div>
@@ -1226,7 +1527,6 @@ function openEditAdminModal(id, currentUsername, currentEmail) {
 
   document.getElementById('save-admin-btn').addEventListener('click', async () => {
     const username = document.getElementById('edit-admin-username').value.trim();
-    const email = document.getElementById('edit-admin-email').value.trim();
     const password = document.getElementById('edit-admin-password').value;
     const errorEl = document.getElementById('edit-admin-error');
     errorEl.textContent = '';
@@ -1236,7 +1536,7 @@ function openEditAdminModal(id, currentUsername, currentEmail) {
       return;
     }
 
-    const payload = { username, email };
+    const payload = { username };
     if (password) payload.password = password;
 
     try {
@@ -1256,12 +1556,10 @@ function openAddAdminModal() {
       <div class="modal">
         <div class="modal-header">
           <h3>Add admin</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
         </div>
         <label>Username</label>
         <input id="new-admin-username" />
-        <label>Email (optional)</label>
-        <input id="new-admin-email" type="email" placeholder="Used for password-reset links" />
         <label>Password</label>
         <input id="new-admin-password" type="password" placeholder="At least 8 characters" />
         <div class="error-text" id="new-admin-error"></div>
@@ -1279,13 +1577,12 @@ function openAddAdminModal() {
 
   document.getElementById('create-admin-btn').addEventListener('click', async () => {
     const username = document.getElementById('new-admin-username').value.trim();
-    const email = document.getElementById('new-admin-email').value.trim();
     const password = document.getElementById('new-admin-password').value;
     const errorEl = document.getElementById('new-admin-error');
     errorEl.textContent = '';
 
     try {
-      await api('/api/admin-users', { method: 'POST', body: JSON.stringify({ username, email, password }) });
+      await api('/api/admin-users', { method: 'POST', body: JSON.stringify({ username, password }) });
       toast('Admin added.');
       closeModal();
       loadAdmins();
@@ -1295,128 +1592,166 @@ function openAddAdminModal() {
   });
 }
 
-// ---------- donations ----------
+// ---------- fosters ----------
 
-let donationFilters = {};
-
-async function loadDonations() {
-  const view = document.getElementById('donations-view');
+async function loadFosters() {
+  const view = document.getElementById('fosters-view');
   view.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
-      <button class="btn-primary" id="new-donation-btn">+ Add donation</button>
-      <button class="btn-secondary" id="export-donations-btn">Export CSV</button>
-    </div>
-    <div class="filters">
-      <input type="date" id="donation-from" title="From date" />
-      <input type="date" id="donation-to" title="To date" />
-      <select id="donation-method-filter">
-        <option value="">All methods</option>
-        ${Object.entries(DONATION_METHOD_LABELS).map(([val, label]) => `<option value="${val}">${label}</option>`).join('')}
-      </select>
-      <button class="btn-secondary" id="donation-filter-apply">Filter</button>
-      <button class="btn-ghost" id="donation-filter-clear">Clear</button>
-    </div>
-    <div id="donations-summary-wrap" style="margin-bottom:1.25rem;"></div>
-    <div id="donations-table-wrap">Loading…</div>
+    <div style="margin-bottom:1rem;"><button class="btn-primary" id="new-foster-btn">+ Start a foster placement</button></div>
+    <div id="fosters-table-wrap">Loading…</div>
   `;
-
-  document.getElementById('new-donation-btn').addEventListener('click', () => openDonationModal());
-  document.getElementById('export-donations-btn').addEventListener('click', exportDonationsCsv);
-  document.getElementById('donation-filter-apply').addEventListener('click', () => {
-    donationFilters = {
-      from: document.getElementById('donation-from').value || undefined,
-      to: document.getElementById('donation-to').value || undefined,
-      method: document.getElementById('donation-method-filter').value || undefined,
-    };
-    refreshDonations();
-  });
-  document.getElementById('donation-filter-clear').addEventListener('click', () => {
-    donationFilters = {};
-    document.getElementById('donation-from').value = '';
-    document.getElementById('donation-to').value = '';
-    document.getElementById('donation-method-filter').value = '';
-    refreshDonations();
-  });
-
-  refreshDonations();
-}
-
-function donationQueryString() {
-  const params = new URLSearchParams();
-  Object.entries(donationFilters).forEach(([k, v]) => { if (v) params.set(k, v); });
-  return params.toString();
-}
-
-async function refreshDonations() {
-  const qs = donationQueryString();
+  document.getElementById('new-foster-btn').addEventListener('click', () => openFosterModal());
 
   try {
-    const [donations, summary] = await Promise.all([
-      api(`/api/donations${qs ? `?${qs}` : ''}`),
-      api(`/api/donations/summary${qs ? `?${qs}` : ''}`),
-    ]);
-    renderDonationsSummary(summary);
-    renderDonationsTable(donations);
+    const [fosters, birds] = await Promise.all([api('/api/fosters'), api('/api/birds?all=1')]);
+    renderFostersTable(fosters, birds);
   } catch (e) {
-    document.getElementById('donations-table-wrap').innerHTML = `<div class="empty-state">Could not load donations.</div>`;
+    document.getElementById('fosters-table-wrap').innerHTML = `<div class="empty-state">Could not load fosters.</div>`;
   }
 }
 
-function renderDonationsSummary(summary) {
-  const wrap = document.getElementById('donations-summary-wrap');
-  const methodBreakdown = Object.entries(summary.by_method)
-    .filter(([, amount]) => amount > 0)
-    .map(([method, amount]) => `${DONATION_METHOD_LABELS[method]}: $${amount.toFixed(2)}`)
-    .join(' · ');
-
+function renderFostersTable(fosters, birds) {
+  const wrap = document.getElementById('fosters-table-wrap');
+  if (fosters.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No foster placements yet.</div>`;
+    return;
+  }
   wrap.innerHTML = `
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:1rem;">
-      <div class="card">
-        <div style="font-size:1.8rem; font-weight:700; font-family:'Fraunces', serif; color:var(--canopy);">$${summary.total.toFixed(2)}</div>
-        <div style="font-weight:600; margin-bottom:0.15rem;">Total (filtered)</div>
-        <div class="mono" style="color:var(--muted); font-size:0.8rem;">${summary.count} donation${summary.count === 1 ? '' : 's'}</div>
-      </div>
-      <div class="card">
-        <div style="font-size:1.8rem; font-weight:700; font-family:'Fraunces', serif; color:var(--canopy);">$${summary.average.toFixed(2)}</div>
-        <div style="font-weight:600; margin-bottom:0.15rem;">Average gift</div>
-        <div class="mono" style="color:var(--muted); font-size:0.8rem;">${methodBreakdown || 'no donations yet'}</div>
-      </div>
-      <div class="card">
-        <div style="font-weight:600; margin-bottom:0.4rem;">Top donors</div>
-        ${summary.top_donors.length === 0
-          ? `<div class="mono" style="color:var(--muted); font-size:0.8rem;">No donations yet</div>`
-          : summary.top_donors.slice(0, 3).map((d) => `
-              <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:0.2rem;">
-                <span>${escapeHtml(d.donor_name)}</span><span class="mono">$${d.total.toFixed(2)}</span>
-              </div>
-            `).join('')}
+    <table>
+      <thead><tr><th>Bird</th><th>Foster</th><th>Contact</th><th>Started</th><th>Ended</th><th></th></tr></thead>
+      <tbody>
+        ${fosters.map((f) => `
+          <tr>
+            <td>${escapeHtml(f.bird_name)}</td>
+            <td>${escapeHtml(f.foster_name)}</td>
+            <td>${escapeHtml(f.foster_contact || '—')}</td>
+            <td class="mono">${escapeHtml(f.start_date)}</td>
+            <td>${f.end_date ? `<span class="pill pill-archived">${escapeHtml(f.end_date)}</span>` : `<span class="pill pill-approved">Active</span>`}</td>
+            <td><button class="btn-secondary" data-edit-foster="${f.id}">Edit</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('[data-edit-foster]').forEach((btn) =>
+    btn.addEventListener('click', () => openFosterModal(fosters.find((f) => f.id == btn.dataset.editFoster), birds))
+  );
+}
+
+function openFosterModal(foster, birds) {
+  const isEdit = Boolean(foster);
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>${isEdit ? 'Edit foster placement' : 'New foster placement'}</h3>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
+        </div>
+        <div class="field-grid">
+          ${isEdit ? '' : `
+          <div><label>Bird</label>
+            <select id="f-bird">
+              ${(birds || []).map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('')}
+            </select>
+          </div>`}
+          <div class="half"><label>Foster name</label><input id="f-name" value="${escapeHtml(foster?.foster_name || '')}" /></div>
+          <div class="half"><label>Contact (optional)</label><input id="f-contact" value="${escapeHtml(foster?.foster_contact || '')}" placeholder="phone or email" /></div>
+          <div class="half"><label>Start date</label><input id="f-start" type="date" value="${foster?.start_date || new Date().toISOString().slice(0, 10)}" /></div>
+          <div class="half"><label>End date (leave blank if ongoing)</label><input id="f-end" type="date" value="${foster?.end_date || ''}" /></div>
+          <div><label>Notes</label><textarea id="f-notes" rows="3">${escapeHtml(foster?.notes || '')}</textarea></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
+          ${isEdit ? `<button class="btn-danger" id="delete-foster">Delete</button>` : `<span></span>`}
+          <button class="btn-primary" id="save-foster">${isEdit ? 'Save changes' : 'Start placement'}</button>
+        </div>
       </div>
     </div>
   `;
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'modal-backdrop') closeModal(); });
+
+  document.getElementById('save-foster').addEventListener('click', async () => {
+    const payload = {
+      foster_name: document.getElementById('f-name').value.trim(),
+      foster_contact: document.getElementById('f-contact').value.trim(),
+      start_date: document.getElementById('f-start').value,
+      end_date: document.getElementById('f-end').value || null,
+      notes: document.getElementById('f-notes').value.trim(),
+    };
+    if (!isEdit) payload.bird_id = document.getElementById('f-bird').value;
+
+    if (!payload.foster_name || !payload.start_date) {
+      alert('Foster name and start date are required.');
+      return;
+    }
+
+    try {
+      if (isEdit) {
+        await api(`/api/fosters/${foster.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        toast('Foster placement updated.');
+      } else {
+        await api('/api/fosters', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Foster placement started.');
+      }
+      closeModal();
+      loadFosters();
+    } catch (err) {
+      alert(`Could not save: ${err.message}`);
+    }
+  });
+
+  if (isEdit) {
+    document.getElementById('delete-foster').addEventListener('click', async () => {
+      if (!confirm('Delete this foster record permanently?')) return;
+      try {
+        await api(`/api/fosters/${foster.id}`, { method: 'DELETE' });
+        toast('Foster record deleted.');
+        closeModal();
+        loadFosters();
+      } catch (err) {
+        alert(`Could not delete: ${err.message}`);
+      }
+    });
+  }
 }
 
-function renderDonationsTable(donations) {
-  const wrap = document.getElementById('donations-table-wrap');
-  if (donations.length === 0) {
-    wrap.innerHTML = `<div class="empty-state">No donations logged yet. Add your first one above.</div>`;
+// ---------- wishlist ----------
+
+async function loadWishlist() {
+  const view = document.getElementById('wishlist-view');
+  view.innerHTML = `
+    <div style="margin-bottom:1rem;"><button class="btn-primary" id="new-wishlist-btn">+ Add item</button></div>
+    <div id="wishlist-table-wrap">Loading…</div>
+  `;
+  document.getElementById('new-wishlist-btn').addEventListener('click', () => openWishlistModal());
+
+  try {
+    const items = await api('/api/wishlist?all=1');
+    renderWishlistTable(items);
+  } catch (e) {
+    document.getElementById('wishlist-table-wrap').innerHTML = `<div class="empty-state">Could not load wishlist.</div>`;
+  }
+}
+
+function renderWishlistTable(items) {
+  const wrap = document.getElementById('wishlist-table-wrap');
+  if (items.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">Nothing on the wishlist yet.</div>`;
     return;
   }
-
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Date</th><th>Donor</th><th>Amount</th><th>Method</th><th>Campaign</th><th>Public</th><th></th></tr></thead>
+      <thead><tr><th>Item</th><th>Needed</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        ${donations.map((d) => `
+        ${items.map((i) => `
           <tr>
-            <td class="mono">${escapeHtml(d.donation_date)}</td>
-            <td>${escapeHtml(d.donor_name)}${d.is_recurring ? ' <span class="pill pill-approved">Recurring</span>' : ''}</td>
-            <td class="mono">$${d.amount.toFixed(2)}</td>
-            <td>${DONATION_METHOD_LABELS[d.method] || d.method}</td>
-            <td>${escapeHtml(d.campaign || '—')}</td>
-            <td>${d.display_publicly ? '<span class="pill pill-approved">Public</span>' : '<span class="mono" style="color:var(--muted); font-size:0.78rem;">Private</span>'}</td>
+            <td>${escapeHtml(i.item_name)}</td>
+            <td>${escapeHtml(i.quantity_needed || '—')}</td>
+            <td><span class="pill ${i.is_fulfilled ? 'pill-archived' : 'pill-new'}">${i.is_fulfilled ? 'Fulfilled' : 'Needed'}</span></td>
             <td style="white-space:nowrap;">
-              <button class="btn-secondary" data-edit-donation="${d.id}" style="margin-right:0.4rem;">Edit</button>
-              <button class="btn-danger" data-delete-donation="${d.id}">Delete</button>
+              <button class="btn-secondary" data-toggle-fulfilled="${i.id}" data-fulfilled="${i.is_fulfilled}" style="margin-right:0.4rem;">${i.is_fulfilled ? 'Mark needed' : 'Mark fulfilled'}</button>
+              <button class="btn-secondary" data-edit-wishlist="${i.id}" style="margin-right:0.4rem;">Edit</button>
+              <button class="btn-danger" data-delete-wishlist="${i.id}">Delete</button>
             </td>
           </tr>
         `).join('')}
@@ -1424,16 +1759,26 @@ function renderDonationsTable(donations) {
     </table>
   `;
 
-  wrap.querySelectorAll('[data-edit-donation]').forEach((btn) =>
-    btn.addEventListener('click', () => openDonationModal(donations.find((d) => d.id == btn.dataset.editDonation)))
+  wrap.querySelectorAll('[data-edit-wishlist]').forEach((btn) =>
+    btn.addEventListener('click', () => openWishlistModal(items.find((i) => i.id == btn.dataset.editWishlist)))
   );
-  wrap.querySelectorAll('[data-delete-donation]').forEach((btn) =>
+  wrap.querySelectorAll('[data-toggle-fulfilled]').forEach((btn) =>
     btn.addEventListener('click', async () => {
-      if (!confirm('Delete this donation record permanently?')) return;
       try {
-        await api(`/api/donations/${btn.dataset.deleteDonation}`, { method: 'DELETE' });
-        toast('Donation deleted.');
-        refreshDonations();
+        await api(`/api/wishlist/${btn.dataset.toggleFulfilled}`, { method: 'PATCH', body: JSON.stringify({ is_fulfilled: btn.dataset.fulfilled !== 'true' }) });
+        loadWishlist();
+      } catch (err) {
+        alert(`Could not update: ${err.message}`);
+      }
+    })
+  );
+  wrap.querySelectorAll('[data-delete-wishlist]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this wishlist item permanently?')) return;
+      try {
+        await api(`/api/wishlist/${btn.dataset.deleteWishlist}`, { method: 'DELETE' });
+        toast('Item deleted.');
+        loadWishlist();
       } catch (err) {
         alert(`Could not delete: ${err.message}`);
       }
@@ -1441,728 +1786,381 @@ function renderDonationsTable(donations) {
   );
 }
 
-function openDonationModal(donation) {
-  const isEdit = Boolean(donation);
+function openWishlistModal(item) {
+  const isEdit = Boolean(item);
   document.getElementById('modal-root').innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal">
         <div class="modal-header">
-          <h3>${isEdit ? 'Edit donation' : 'Log donation'}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
+          <h3>${isEdit ? 'Edit item' : 'New wishlist item'}</h3>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
         </div>
-        <div class="field-grid">
-          <div class="half"><label>Donor name</label><input id="d-name" value="${escapeHtml(donation?.donor_name || '')}" /></div>
-          <div class="half"><label>Donor email (optional)</label><input id="d-email" value="${escapeHtml(donation?.donor_email || '')}" /></div>
-          <div class="half"><label>Amount ($)</label><input id="d-amount" type="number" step="0.01" min="0.01" value="${donation?.amount ?? ''}" /></div>
-          <div class="half"><label>Date</label><input id="d-date" type="date" value="${donation?.donation_date || new Date().toISOString().slice(0, 10)}" /></div>
-          <div class="half"><label>Method</label>
-            <select id="d-method">
-              ${Object.entries(DONATION_METHOD_LABELS).map(([val, label]) =>
-                `<option value="${val}" ${(donation?.method || 'other') === val ? 'selected' : ''}>${label}</option>`
-              ).join('')}
-            </select>
-          </div>
-          <div class="half"><label>Campaign (optional)</label><input id="d-campaign" value="${escapeHtml(donation?.campaign || '')}" placeholder="e.g. Spring appeal" /></div>
-          <div><label><input type="checkbox" id="d-recurring" style="width:auto; display:inline-block; margin-right:0.4rem;" ${donation?.is_recurring ? 'checked' : ''}/> Recurring donor</label></div>
-          <div>
-            <label><input type="checkbox" id="d-public" style="width:auto; display:inline-block; margin-right:0.4rem;" ${donation?.display_publicly ? 'checked' : ''}/> Display publicly on website</label>
-            <div class="mono" style="color:var(--muted); font-size:0.78rem; margin-top:-0.35rem;">Only checked donors can ever appear on the public "top donors" widget — off by default. Get the donor's OK before checking this.</div>
-          </div>
-          <div><label>Notes (optional)</label><textarea id="d-notes" rows="2">${escapeHtml(donation?.notes || '')}</textarea></div>
-        </div>
-        <div class="error-text" id="donation-error"></div>
-        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
-          ${isEdit ? `<button class="btn-danger" id="delete-donation">Delete</button>` : `<span></span>`}
-          <button class="btn-primary" id="save-donation">${isEdit ? 'Save changes' : 'Log donation'}</button>
+        <label>Item name</label>
+        <input id="w-name" value="${escapeHtml(item?.item_name || '')}" placeholder="e.g. Millet sprays" />
+        <label>Quantity needed (optional)</label>
+        <input id="w-qty" value="${escapeHtml(item?.quantity_needed || '')}" placeholder="e.g. 10 boxes" />
+        <label>Description (optional)</label>
+        <textarea id="w-desc" rows="3">${escapeHtml(item?.description || '')}</textarea>
+        <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
+          <button class="btn-primary" id="save-wishlist">${isEdit ? 'Save changes' : 'Add item'}</button>
         </div>
       </div>
     </div>
   `;
-
   document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-backdrop') closeModal();
-  });
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'modal-backdrop') closeModal(); });
 
-  document.getElementById('save-donation').addEventListener('click', async () => {
-    const errorEl = document.getElementById('donation-error');
-    errorEl.textContent = '';
+  document.getElementById('save-wishlist').addEventListener('click', async () => {
     const payload = {
-      donor_name: document.getElementById('d-name').value.trim(),
-      donor_email: document.getElementById('d-email').value.trim(),
-      amount: Number(document.getElementById('d-amount').value),
-      donation_date: document.getElementById('d-date').value,
-      method: document.getElementById('d-method').value,
-      campaign: document.getElementById('d-campaign').value.trim(),
-      is_recurring: document.getElementById('d-recurring').checked,
-      display_publicly: document.getElementById('d-public').checked,
-      notes: document.getElementById('d-notes').value.trim(),
+      item_name: document.getElementById('w-name').value.trim(),
+      quantity_needed: document.getElementById('w-qty').value.trim(),
+      description: document.getElementById('w-desc').value.trim(),
     };
-
-    if (!payload.donor_name) return (errorEl.textContent = 'Donor name is required.');
-    if (!payload.amount || payload.amount <= 0) return (errorEl.textContent = 'Enter a valid amount.');
-    if (!payload.donation_date) return (errorEl.textContent = 'Date is required.');
+    if (!payload.item_name) { alert('Item name is required.'); return; }
 
     try {
       if (isEdit) {
-        await api(`/api/donations/${donation.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        toast('Donation updated.');
+        await api(`/api/wishlist/${item.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        toast('Item updated.');
       } else {
-        await api('/api/donations', { method: 'POST', body: JSON.stringify(payload) });
-        toast('Donation logged.');
+        await api('/api/wishlist', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Item added.');
       }
       closeModal();
-      refreshDonations();
+      loadWishlist();
+    } catch (err) {
+      alert(`Could not save: ${err.message}`);
+    }
+  });
+}
+
+// ---------- testimonials ----------
+
+async function loadTestimonials() {
+  const view = document.getElementById('testimonials-view');
+  view.innerHTML = `<div id="testimonials-table-wrap">Loading…</div>`;
+  try {
+    const items = await api('/api/testimonials?all=1');
+    renderTestimonialsTable(items);
+  } catch (e) {
+    document.getElementById('testimonials-table-wrap').innerHTML = `<div class="empty-state">Could not load testimonials.</div>`;
+  }
+}
+
+function renderTestimonialsTable(items) {
+  const wrap = document.getElementById('testimonials-table-wrap');
+  if (items.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No submitted stories yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = items.map((t) => `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.5rem;">
+        <div>
+          <strong>${escapeHtml(t.author_name)}</strong>${t.bird_name ? ` · adopted ${escapeHtml(t.bird_name)}` : ''}
+          <div class="mono" style="color:var(--muted); font-size:0.78rem;">${fmtDate(t.created_at)}</div>
+        </div>
+        <span class="pill ${t.is_approved ? 'pill-approved' : 'pill-new'}">${t.is_approved ? 'Published' : 'Pending review'}</span>
+      </div>
+      <p style="margin-bottom:0.75rem;">${escapeHtml(t.story)}</p>
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn-secondary" data-toggle-approve="${t.id}" data-approved="${t.is_approved}">${t.is_approved ? 'Unpublish' : 'Approve & publish'}</button>
+        <button class="btn-danger" data-delete-testimonial="${t.id}">Delete</button>
+      </div>
+    </div>
+  `).join('');
+
+  wrap.querySelectorAll('[data-toggle-approve]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      try {
+        await api(`/api/testimonials/${btn.dataset.toggleApprove}`, { method: 'PATCH', body: JSON.stringify({ is_approved: btn.dataset.approved !== 'true' }) });
+        loadTestimonials();
+      } catch (err) {
+        alert(`Could not update: ${err.message}`);
+      }
+    })
+  );
+  wrap.querySelectorAll('[data-delete-testimonial]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this story permanently?')) return;
+      try {
+        await api(`/api/testimonials/${btn.dataset.deleteTestimonial}`, { method: 'DELETE' });
+        toast('Story deleted.');
+        loadTestimonials();
+      } catch (err) {
+        alert(`Could not delete: ${err.message}`);
+      }
+    })
+  );
+}
+
+// ---------- FAQs ----------
+
+async function loadFaqs() {
+  const view = document.getElementById('faqs-view');
+  view.innerHTML = `
+    <div style="margin-bottom:1rem;"><button class="btn-primary" id="new-faq-btn">+ Add FAQ</button></div>
+    <div id="faqs-table-wrap">Loading…</div>
+  `;
+  document.getElementById('new-faq-btn').addEventListener('click', () => openFaqModal());
+  try {
+    const items = await api('/api/faqs?all=1');
+    renderFaqsTable(items);
+  } catch (e) {
+    document.getElementById('faqs-table-wrap').innerHTML = `<div class="empty-state">Could not load FAQs.</div>`;
+  }
+}
+
+function renderFaqsTable(items) {
+  const wrap = document.getElementById('faqs-table-wrap');
+  if (items.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No FAQs yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Order</th><th>Question</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${items.map((f) => `
+          <tr>
+            <td class="mono">${f.sort_order}</td>
+            <td>${escapeHtml(f.question)}</td>
+            <td><span class="pill ${f.is_published ? 'pill-approved' : 'pill-archived'}">${f.is_published ? 'Published' : 'Draft'}</span></td>
+            <td><button class="btn-secondary" data-edit-faq="${f.id}">Edit</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('[data-edit-faq]').forEach((btn) =>
+    btn.addEventListener('click', () => openFaqModal(items.find((f) => f.id == btn.dataset.editFaq)))
+  );
+}
+
+function openFaqModal(faq) {
+  const isEdit = Boolean(faq);
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>${isEdit ? 'Edit FAQ' : 'New FAQ'}</h3>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
+        </div>
+        <label>Question</label>
+        <input id="faq-question" value="${escapeHtml(faq?.question || '')}" />
+        <label>Answer</label>
+        <textarea id="faq-answer" rows="4">${escapeHtml(faq?.answer || '')}</textarea>
+        <div class="field-grid">
+          <div class="half"><label>Sort order (lower shows first)</label><input id="faq-order" type="number" value="${faq?.sort_order ?? 0}" /></div>
+          <div class="half"><label>Status</label>
+            <select id="faq-published">
+              <option value="1" ${faq?.is_published !== 0 ? 'selected' : ''}>Published</option>
+              <option value="0" ${faq?.is_published === 0 ? 'selected' : ''}>Draft</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
+          ${isEdit ? `<button class="btn-danger" id="delete-faq">Delete</button>` : `<span></span>`}
+          <button class="btn-primary" id="save-faq">${isEdit ? 'Save changes' : 'Add FAQ'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'modal-backdrop') closeModal(); });
+
+  document.getElementById('save-faq').addEventListener('click', async () => {
+    const payload = {
+      question: document.getElementById('faq-question').value.trim(),
+      answer: document.getElementById('faq-answer').value.trim(),
+      sort_order: Number(document.getElementById('faq-order').value) || 0,
+      is_published: document.getElementById('faq-published').value === '1',
+    };
+    if (!payload.question || !payload.answer) { alert('Question and answer are required.'); return; }
+
+    try {
+      if (isEdit) {
+        await api(`/api/faqs/${faq.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        toast('FAQ updated.');
+      } else {
+        await api('/api/faqs', { method: 'POST', body: JSON.stringify(payload) });
+        toast('FAQ added.');
+      }
+      closeModal();
+      loadFaqs();
+    } catch (err) {
+      alert(`Could not save: ${err.message}`);
+    }
+  });
+
+  if (isEdit) {
+    document.getElementById('delete-faq').addEventListener('click', async () => {
+      if (!confirm('Delete this FAQ permanently?')) return;
+      try {
+        await api(`/api/faqs/${faq.id}`, { method: 'DELETE' });
+        toast('FAQ deleted.');
+        closeModal();
+        loadFaqs();
+      } catch (err) {
+        alert(`Could not delete: ${err.message}`);
+      }
+    });
+  }
+}
+
+// ---------- store ----------
+
+function fmtMoney(n) {
+  return `$${Number(n).toFixed(2)}`;
+}
+
+async function loadStore() {
+  const view = document.getElementById('store-view');
+  view.innerHTML = `
+    <div style="margin-bottom:1rem;"><button class="btn-primary" id="new-store-item-btn">+ Add item</button></div>
+    <div id="store-table-wrap">Loading…</div>
+  `;
+  document.getElementById('new-store-item-btn').addEventListener('click', () => openStoreItemModal());
+
+  try {
+    const items = await api('/api/store?all=1');
+    renderStoreTable(items);
+  } catch (e) {
+    document.getElementById('store-table-wrap').innerHTML = `<div class="empty-state">Could not load store items.</div>`;
+  }
+}
+
+function renderStoreTable(items) {
+  const wrap = document.getElementById('store-table-wrap');
+  if (items.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No store items yet. Add your first one above.</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th></th><th>Name</th><th>Price</th><th>Status</th><th>Visible</th><th></th></tr></thead>
+      <tbody>
+        ${items.map((i) => `
+          <tr>
+            <td>${i.image_url
+              ? `<img src="${escapeHtml(i.image_url)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:8px;" />`
+              : `<div style="width:40px;height:40px;border-radius:8px;background:rgba(255,255,255,0.06);"></div>`}</td>
+            <td>${escapeHtml(i.name)}</td>
+            <td class="mono">
+              ${i.is_on_sale
+                ? `<span style="text-decoration:line-through; color:var(--muted);">${fmtMoney(i.price)}</span> <strong style="color:var(--danger);">${fmtMoney(i.sale_price)}</strong>`
+                : fmtMoney(i.price)}
+            </td>
+            <td>
+              ${i.is_clearance ? '<span class="pill pill-declined">Clearance</span> ' : ''}
+              ${i.is_on_sale ? '<span class="pill pill-new">On sale</span> ' : ''}
+              ${i.is_sold_out ? '<span class="pill pill-archived">Sold out</span>' : ''}
+              ${!i.is_clearance && !i.is_on_sale && !i.is_sold_out ? '<span class="pill pill-approved">Regular</span>' : ''}
+            </td>
+            <td><span class="pill ${i.is_published ? 'pill-approved' : 'pill-archived'}">${i.is_published ? 'Published' : 'Draft'}</span></td>
+            <td><button class="btn-secondary" data-edit-item="${i.id}">Edit</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('[data-edit-item]').forEach((btn) =>
+    btn.addEventListener('click', () => openStoreItemModal(items.find((i) => i.id == btn.dataset.editItem)))
+  );
+}
+
+function openStoreItemModal(item) {
+  const isEdit = Boolean(item);
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>${isEdit ? 'Edit item' : 'New store item'}</h3>
+          <button class="btn-ghost" id="modal-close">✕</button>
+        </div>
+        <div class="field-grid">
+          <div><label>Name</label><input id="si-name" value="${escapeHtml(item?.name || '')}" /></div>
+          <div><label>Description</label><textarea id="si-desc" rows="3">${escapeHtml(item?.description || '')}</textarea></div>
+          <div>${imageFieldHtml('si-image', item?.image_url, 'Photo (optional)')}</div>
+          <div><label>Buy link (optional)</label><input id="si-buy-url" value="${escapeHtml(item?.buy_url || '')}" placeholder="Your PayPal/Stripe/Etsy checkout link for this item" /></div>
+          <div class="half"><label>Regular price ($)</label><input id="si-price" type="number" step="0.01" min="0" value="${item?.price ?? ''}" /></div>
+          <div class="half"><label>Sale price ($, if on sale)</label><input id="si-sale-price" type="number" step="0.01" min="0" value="${item?.sale_price ?? ''}" /></div>
+          <div class="half"><label style="display:flex; align-items:center; gap:0.4rem; margin-top:1.2rem;"><input type="checkbox" id="si-on-sale" ${item?.is_on_sale ? 'checked' : ''} style="width:auto;" /> On sale</label></div>
+          <div class="half"><label style="display:flex; align-items:center; gap:0.4rem; margin-top:1.2rem;"><input type="checkbox" id="si-clearance" ${item?.is_clearance ? 'checked' : ''} style="width:auto;" /> Clearance</label></div>
+          <div class="half"><label style="display:flex; align-items:center; gap:0.4rem;"><input type="checkbox" id="si-sold-out" ${item?.is_sold_out ? 'checked' : ''} style="width:auto;" /> Sold out</label></div>
+          <div class="half"><label>Visibility</label>
+            <select id="si-published">
+              <option value="1" ${item?.is_published !== 0 ? 'selected' : ''}>Published</option>
+              <option value="0" ${item?.is_published === 0 ? 'selected' : ''}>Draft</option>
+            </select>
+          </div>
+        </div>
+        <div class="error-text" id="store-item-error"></div>
+        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
+          ${isEdit ? `<button class="btn-danger" id="delete-store-item">Delete</button>` : `<span></span>`}
+          <button class="btn-primary" id="save-store-item">${isEdit ? 'Save changes' : 'Add item'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'modal-backdrop') closeModal(); });
+  attachImageUploadHandlers('si-image');
+
+  document.getElementById('save-store-item').addEventListener('click', async () => {
+    const errorEl = document.getElementById('store-item-error');
+    errorEl.textContent = '';
+
+    const payload = {
+      name: document.getElementById('si-name').value.trim(),
+      description: document.getElementById('si-desc').value.trim(),
+      image_url: document.getElementById('si-image').value.trim(),
+      buy_url: document.getElementById('si-buy-url').value.trim(),
+      price: document.getElementById('si-price').value,
+      sale_price: document.getElementById('si-sale-price').value,
+      is_on_sale: document.getElementById('si-on-sale').checked,
+      is_clearance: document.getElementById('si-clearance').checked,
+      is_sold_out: document.getElementById('si-sold-out').checked,
+      is_published: document.getElementById('si-published').value === '1',
+    };
+
+    if (!payload.name || payload.price === '') {
+      errorEl.textContent = 'Name and regular price are required.';
+      return;
+    }
+    if (payload.is_on_sale && payload.sale_price === '') {
+      errorEl.textContent = 'Enter a sale price, or uncheck "On sale."';
+      return;
+    }
+
+    try {
+      if (isEdit) {
+        await api(`/api/store/${item.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        toast('Item updated.');
+      } else {
+        await api('/api/store', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Item added.');
+      }
+      closeModal();
+      loadStore();
     } catch (err) {
       errorEl.textContent = err.message;
     }
   });
 
   if (isEdit) {
-    document.getElementById('delete-donation').addEventListener('click', async () => {
-      if (!confirm('Delete this donation record permanently?')) return;
+    document.getElementById('delete-store-item').addEventListener('click', async () => {
+      if (!confirm(`Delete "${item.name}" permanently?`)) return;
       try {
-        await api(`/api/donations/${donation.id}`, { method: 'DELETE' });
-        toast('Donation deleted.');
+        await api(`/api/store/${item.id}`, { method: 'DELETE' });
+        toast('Item deleted.');
         closeModal();
-        refreshDonations();
+        loadStore();
       } catch (err) {
         alert(`Could not delete: ${err.message}`);
       }
     });
   }
-}
-
-function exportDonationsCsv() {
-  const qs = donationQueryString();
-  window.open(`${API_BASE}/api/donations/export${qs ? `?${qs}` : ''}`, '_blank');
-}
-
-// ---------- volunteers & fosters ----------
-
-async function loadVolunteers() {
-  const view = document.getElementById('volunteers-view');
-  view.innerHTML = `
-    <div style="margin-bottom:1rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.75rem;">
-      <button class="btn-primary" id="new-volunteer-btn">+ Add volunteer</button>
-      <select id="volunteer-status-filter" style="width:auto;">
-        <option value="">All statuses</option>
-        <option value="active">Active</option>
-        <option value="inactive">Inactive</option>
-      </select>
-    </div>
-    <div id="volunteers-table-wrap">Loading…</div>
-  `;
-  document.getElementById('new-volunteer-btn').addEventListener('click', () => openVolunteerModal());
-  document.getElementById('volunteer-status-filter').addEventListener('change', (e) => refreshVolunteers(e.target.value || undefined));
-
-  refreshVolunteers();
-}
-
-async function refreshVolunteers(status) {
-  try {
-    const volunteers = await api(`/api/volunteers${status ? `?status=${status}` : ''}`);
-    renderVolunteersTable(volunteers);
-  } catch (e) {
-    document.getElementById('volunteers-table-wrap').innerHTML = `<div class="empty-state">Could not load volunteers.</div>`;
-  }
-}
-
-function renderVolunteersTable(volunteers) {
-  const wrap = document.getElementById('volunteers-table-wrap');
-  if (volunteers.length === 0) {
-    wrap.innerHTML = `<div class="empty-state">No volunteers on the roster yet. Add one above, or use "Add to volunteer roster" from an approved volunteer application.</div>`;
-    return;
-  }
-
-  wrap.innerHTML = `
-    <table>
-      <thead><tr><th>Name</th><th>Contact</th><th>Status</th><th>Active fosters</th><th>Total hours</th><th></th></tr></thead>
-      <tbody>
-        ${volunteers.map((v) => `
-          <tr class="clickable" data-id="${v.id}">
-            <td>${escapeHtml(v.full_name)}</td>
-            <td class="mono" style="font-size:0.82rem;">${escapeHtml(v.email || '—')}${v.phone ? `<br/>${escapeHtml(v.phone)}` : ''}</td>
-            <td><span class="pill ${v.status === 'active' ? 'pill-approved' : 'pill-archived'}">${VOLUNTEER_STATUS_LABELS[v.status]}</span></td>
-            <td>${v.active_fosters}</td>
-            <td class="mono">${v.total_hours}</td>
-            <td></td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-
-  wrap.querySelectorAll('tr[data-id]').forEach((row) =>
-    row.addEventListener('click', () => openVolunteerDetail(row.dataset.id))
-  );
-}
-
-function openVolunteerModal(volunteer) {
-  const isEdit = Boolean(volunteer);
-  document.getElementById('modal-root').innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>${isEdit ? 'Edit volunteer' : 'Add volunteer'}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
-        </div>
-        <div class="field-grid">
-          <div><label>Full name</label><input id="v-name" value="${escapeHtml(volunteer?.full_name || '')}" /></div>
-          <div class="half"><label>Email</label><input id="v-email" value="${escapeHtml(volunteer?.email || '')}" /></div>
-          <div class="half"><label>Phone</label><input id="v-phone" value="${escapeHtml(volunteer?.phone || '')}" /></div>
-          <div class="half"><label>Status</label>
-            <select id="v-status">
-              <option value="active" ${(!volunteer || volunteer.status === 'active') ? 'selected' : ''}>Active</option>
-              <option value="inactive" ${volunteer?.status === 'inactive' ? 'selected' : ''}>Inactive</option>
-            </select>
-          </div>
-          <div class="half"><label>Joined</label><input id="v-joined" type="date" value="${volunteer?.joined_date || new Date().toISOString().slice(0, 10)}" /></div>
-          <div><label>Skills / interests (optional)</label><input id="v-skills" value="${escapeHtml(volunteer?.skills || '')}" /></div>
-          <div><label>Notes (optional)</label><textarea id="v-notes" rows="2">${escapeHtml(volunteer?.notes || '')}</textarea></div>
-        </div>
-        <div class="error-text" id="volunteer-error"></div>
-        <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
-          <button class="btn-primary" id="save-volunteer">${isEdit ? 'Save changes' : 'Add volunteer'}</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-backdrop') closeModal();
-  });
-
-  document.getElementById('save-volunteer').addEventListener('click', async () => {
-    const errorEl = document.getElementById('volunteer-error');
-    errorEl.textContent = '';
-    const payload = {
-      full_name: document.getElementById('v-name').value.trim(),
-      email: document.getElementById('v-email').value.trim(),
-      phone: document.getElementById('v-phone').value.trim(),
-      status: document.getElementById('v-status').value,
-      joined_date: document.getElementById('v-joined').value,
-      skills: document.getElementById('v-skills').value.trim(),
-      notes: document.getElementById('v-notes').value.trim(),
-    };
-
-    if (!payload.full_name) return (errorEl.textContent = 'Full name is required.');
-
-    try {
-      if (isEdit) {
-        await api(`/api/volunteers/${volunteer.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        toast('Volunteer updated.');
-      } else {
-        await api('/api/volunteers', { method: 'POST', body: JSON.stringify(payload) });
-        toast('Volunteer added.');
-      }
-      closeModal();
-      refreshVolunteers();
-    } catch (err) {
-      errorEl.textContent = err.message;
-    }
-  });
-}
-
-async function openVolunteerDetail(id) {
-  const v = await api(`/api/volunteers/${id}`);
-
-  const fostersHtml = v.fosters.length === 0
-    ? `<div class="mono" style="color:var(--muted); font-size:0.85rem; margin-bottom:0.75rem;">No foster history yet.</div>`
-    : `<table style="margin-bottom:0.75rem;">
-        <thead><tr><th>Bird</th><th>Start</th><th>End</th><th>Notes</th><th></th></tr></thead>
-        <tbody>
-          ${v.fosters.map((f) => `
-            <tr>
-              <td>${escapeHtml(f.bird_name)} <span class="mono" style="color:var(--muted); font-size:0.78rem;">(${escapeHtml(f.bird_species)})</span></td>
-              <td class="mono">${escapeHtml(f.start_date)}</td>
-              <td>${f.end_date ? `<span class="mono">${escapeHtml(f.end_date)}</span>` : `<span class="pill pill-approved">Ongoing</span>`}</td>
-              <td style="font-size:0.85rem;">${escapeHtml(f.notes || '—')}</td>
-              <td style="white-space:nowrap;">
-                ${!f.end_date ? `<button class="btn-secondary" data-end-foster="${f.id}" style="font-size:0.8rem; padding:0.35rem 0.7rem;">End foster</button>` : ''}
-                <button class="btn-danger" data-delete-foster="${f.id}" style="font-size:0.8rem; padding:0.35rem 0.7rem;">Remove</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>`;
-
-  const hoursHtml = v.hours.length === 0
-    ? `<div class="mono" style="color:var(--muted); font-size:0.85rem; margin-bottom:0.75rem;">No hours logged yet.</div>`
-    : `<table style="margin-bottom:0.75rem;">
-        <thead><tr><th>Date</th><th>Hours</th><th>Activity</th><th></th></tr></thead>
-        <tbody>
-          ${v.hours.map((h) => `
-            <tr>
-              <td class="mono">${escapeHtml(h.log_date)}</td>
-              <td class="mono">${h.hours}</td>
-              <td style="font-size:0.85rem;">${escapeHtml(h.activity || '—')}</td>
-              <td><button class="btn-danger" data-delete-hours="${h.id}" style="font-size:0.8rem; padding:0.35rem 0.7rem;">Delete</button></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>`;
-
-  document.getElementById('modal-root').innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal" style="max-width:720px;">
-        <div class="modal-header">
-          <h3>${escapeHtml(v.full_name)}</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
-        </div>
-        <p class="mono" style="color:var(--muted); font-size:0.82rem;">
-          ${escapeHtml(v.email || 'no email')} ${v.phone ? `· ${escapeHtml(v.phone)}` : ''} · Joined ${escapeHtml(v.joined_date)}
-          · <span class="pill ${v.status === 'active' ? 'pill-approved' : 'pill-archived'}">${VOLUNTEER_STATUS_LABELS[v.status]}</span>
-        </p>
-        ${v.skills ? `<p style="font-size:0.9rem; margin-bottom:0.5rem;"><strong>Skills/interests:</strong> ${escapeHtml(v.skills)}</p>` : ''}
-        ${v.notes ? `<p style="font-size:0.9rem; margin-bottom:0.5rem;"><strong>Notes:</strong> ${escapeHtml(v.notes)}</p>` : ''}
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin:1.25rem 0 0.5rem;">
-          <h4 style="margin:0;">Foster history</h4>
-          <button class="btn-secondary" id="assign-foster-btn" style="font-size:0.82rem;">+ Assign a bird</button>
-        </div>
-        ${fostersHtml}
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin:1.25rem 0 0.5rem;">
-          <h4 style="margin:0;">Hours logged (total: ${v.total_hours})</h4>
-          <button class="btn-secondary" id="log-hours-btn" style="font-size:0.82rem;">+ Log hours</button>
-        </div>
-        ${hoursHtml}
-
-        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
-          <button class="btn-danger" id="delete-volunteer">Remove from roster</button>
-          <button class="btn-secondary" id="edit-volunteer-btn">Edit details</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-backdrop') closeModal();
-  });
-
-  document.getElementById('edit-volunteer-btn').addEventListener('click', () => openVolunteerModal(v));
-  document.getElementById('assign-foster-btn').addEventListener('click', () => openAssignFosterModal(v.id));
-  document.getElementById('log-hours-btn').addEventListener('click', () => openLogHoursModal(v.id));
-
-  document.getElementById('delete-volunteer').addEventListener('click', async () => {
-    if (!confirm(`Remove ${v.full_name} from the volunteer roster? This also deletes their foster history and hours log.`)) return;
-    try {
-      await api(`/api/volunteers/${v.id}`, { method: 'DELETE' });
-      toast('Volunteer removed.');
-      closeModal();
-      refreshVolunteers();
-    } catch (err) {
-      alert(`Could not remove: ${err.message}`);
-    }
-  });
-
-  document.querySelectorAll('[data-end-foster]').forEach((btn) =>
-    btn.addEventListener('click', async () => {
-      try {
-        await api(`/api/volunteers/fosters/${btn.dataset.endFoster}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ end_date: new Date().toISOString().slice(0, 10) }),
-        });
-        toast('Foster ended.');
-        openVolunteerDetail(id);
-        refreshVolunteers();
-      } catch (err) {
-        alert(`Could not update: ${err.message}`);
-      }
-    })
-  );
-
-  document.querySelectorAll('[data-delete-foster]').forEach((btn) =>
-    btn.addEventListener('click', async () => {
-      if (!confirm('Remove this foster record permanently?')) return;
-      try {
-        await api(`/api/volunteers/fosters/${btn.dataset.deleteFoster}`, { method: 'DELETE' });
-        toast('Foster record removed.');
-        openVolunteerDetail(id);
-        refreshVolunteers();
-      } catch (err) {
-        alert(`Could not remove: ${err.message}`);
-      }
-    })
-  );
-
-  document.querySelectorAll('[data-delete-hours]').forEach((btn) =>
-    btn.addEventListener('click', async () => {
-      if (!confirm('Delete this hours entry permanently?')) return;
-      try {
-        await api(`/api/volunteers/hours/${btn.dataset.deleteHours}`, { method: 'DELETE' });
-        toast('Hours entry deleted.');
-        openVolunteerDetail(id);
-        refreshVolunteers();
-      } catch (err) {
-        alert(`Could not delete: ${err.message}`);
-      }
-    })
-  );
-}
-
-async function openAssignFosterModal(volunteerId) {
-  let birds = [];
-  try {
-    birds = await api('/api/birds?all=1');
-  } catch (e) {
-    alert('Could not load birds.');
-    return;
-  }
-
-  document.getElementById('modal-root').innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>Assign a foster bird</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
-        </div>
-        <label>Bird</label>
-        <select id="foster-bird">
-          ${birds.map((b) => `<option value="${b.id}">${escapeHtml(b.name)} (${escapeHtml(b.species)}) — ${BIRD_STATUS_LABELS[b.status]}</option>`).join('')}
-        </select>
-        <label>Start date</label>
-        <input id="foster-start" type="date" value="${new Date().toISOString().slice(0, 10)}" />
-        <label>Notes (optional)</label>
-        <textarea id="foster-notes" rows="2"></textarea>
-        <div class="error-text" id="foster-error"></div>
-        <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
-          <button class="btn-primary" id="save-foster">Assign</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-backdrop') closeModal();
-  });
-
-  document.getElementById('save-foster').addEventListener('click', async () => {
-    const errorEl = document.getElementById('foster-error');
-    if (birds.length === 0) return (errorEl.textContent = 'No birds available to assign.');
-    try {
-      await api(`/api/volunteers/${volunteerId}/fosters`, {
-        method: 'POST',
-        body: JSON.stringify({
-          bird_id: Number(document.getElementById('foster-bird').value),
-          start_date: document.getElementById('foster-start').value,
-          notes: document.getElementById('foster-notes').value.trim(),
-        }),
-      });
-      toast('Foster assigned.');
-      openVolunteerDetail(volunteerId);
-      refreshVolunteers();
-    } catch (err) {
-      errorEl.textContent = err.message;
-    }
-  });
-}
-
-function openLogHoursModal(volunteerId) {
-  document.getElementById('modal-root').innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>Log volunteer hours</h3>
-          <button class="btn-ghost" id="modal-close">✕</button>
-        </div>
-        <label>Date</label>
-        <input id="hours-date" type="date" value="${new Date().toISOString().slice(0, 10)}" />
-        <label>Hours</label>
-        <input id="hours-value" type="number" step="0.25" min="0.25" />
-        <label>Activity (optional)</label>
-        <input id="hours-activity" placeholder="e.g. Cage cleaning, event staffing" />
-        <div class="error-text" id="hours-error"></div>
-        <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
-          <button class="btn-primary" id="save-hours">Log hours</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-backdrop') closeModal();
-  });
-
-  document.getElementById('save-hours').addEventListener('click', async () => {
-    const errorEl = document.getElementById('hours-error');
-    const payload = {
-      log_date: document.getElementById('hours-date').value,
-      hours: Number(document.getElementById('hours-value').value),
-      activity: document.getElementById('hours-activity').value.trim(),
-    };
-    if (!payload.log_date) return (errorEl.textContent = 'Date is required.');
-    if (!payload.hours || payload.hours <= 0) return (errorEl.textContent = 'Enter a valid number of hours.');
-
-    try {
-      await api(`/api/volunteers/${volunteerId}/hours`, { method: 'POST', body: JSON.stringify(payload) });
-      toast('Hours logged.');
-      openVolunteerDetail(volunteerId);
-      refreshVolunteers();
-    } catch (err) {
-      errorEl.textContent = err.message;
-    }
-  });
-}
-
-// ---------- audit log ----------
-
-let auditLogPage = 1;
-const AUDIT_LOG_LIMIT = 50;
-
-async function loadAuditLog() {
-  const view = document.getElementById('audit-log-view');
-  view.innerHTML = `
-    <div class="filters">
-      <input id="audit-search" placeholder="Search action, admin, or path…" style="max-width:260px;" />
-      <select id="audit-admin-filter"><option value="">All admins</option></select>
-      <input id="audit-from" type="date" title="From date" />
-      <input id="audit-to" type="date" title="To date" />
-      <button class="btn-secondary" id="audit-export-btn">Export CSV</button>
-    </div>
-    <div id="audit-log-table-wrap">Loading…</div>
-    <div id="audit-log-pager" style="display:flex; justify-content:center; gap:0.75rem; margin-top:1rem;"></div>
-  `;
-
-  try {
-    const admins = await api('/api/audit-log/admins');
-    const sel = document.getElementById('audit-admin-filter');
-    admins.forEach((a) => {
-      const opt = document.createElement('option');
-      opt.value = a.admin_id;
-      opt.textContent = a.admin_username;
-      sel.appendChild(opt);
-    });
-  } catch (e) {
-    // filter dropdown is a nice-to-have; don't block the log itself if this fails
-  }
-
-  auditLogPage = 1;
-  await refreshAuditLog();
-
-  document.getElementById('audit-search').addEventListener('input', debounce(() => { auditLogPage = 1; refreshAuditLog(); }, 300));
-  document.getElementById('audit-admin-filter').addEventListener('change', () => { auditLogPage = 1; refreshAuditLog(); });
-  document.getElementById('audit-from').addEventListener('change', () => { auditLogPage = 1; refreshAuditLog(); });
-  document.getElementById('audit-to').addEventListener('change', () => { auditLogPage = 1; refreshAuditLog(); });
-  document.getElementById('audit-export-btn').addEventListener('click', () => {
-    window.open(`${API_BASE}/api/audit-log/export${auditLogQueryString()}`, '_blank');
-  });
-}
-
-function debounce(fn, ms) {
-  let timer;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), ms);
-  };
-}
-
-function auditLogQueryString(extra = {}) {
-  const params = new URLSearchParams();
-  const q = document.getElementById('audit-search')?.value.trim();
-  const adminId = document.getElementById('audit-admin-filter')?.value;
-  const from = document.getElementById('audit-from')?.value;
-  const to = document.getElementById('audit-to')?.value;
-  if (q) params.set('q', q);
-  if (adminId) params.set('admin_id', adminId);
-  if (from) params.set('from', from);
-  if (to) params.set('to', `${to} 23:59:59`);
-  Object.entries(extra).forEach(([k, v]) => params.set(k, v));
-  const str = params.toString();
-  return str ? `?${str}` : '';
-}
-
-async function refreshAuditLog() {
-  const wrap = document.getElementById('audit-log-table-wrap');
-  wrap.innerHTML = 'Loading…';
-  try {
-    const data = await api(`/api/audit-log${auditLogQueryString({ page: auditLogPage, limit: AUDIT_LOG_LIMIT })}`);
-    renderAuditLog(data);
-  } catch (e) {
-    wrap.innerHTML = `<div class="empty-state">Could not load the audit log.</div>`;
-  }
-}
-
-function renderAuditLog(data) {
-  const wrap = document.getElementById('audit-log-table-wrap');
-  const pager = document.getElementById('audit-log-pager');
-
-  if (data.entries.length === 0) {
-    wrap.innerHTML = `<div class="empty-state">No matching actions logged.</div>`;
-    pager.innerHTML = '';
-    return;
-  }
-
-  wrap.innerHTML = `
-    <table>
-      <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Path</th><th>IP</th></tr></thead>
-      <tbody>
-        ${data.entries.map((e) => `
-          <tr>
-            <td class="mono" style="white-space:nowrap;">${fmtDate(e.created_at)}</td>
-            <td>${escapeHtml(e.admin_username || '—')}</td>
-            <td>${escapeHtml(e.action)}</td>
-            <td class="mono" style="font-size:0.78rem; color:var(--muted);">${escapeHtml(e.method)} ${escapeHtml(e.path)}</td>
-            <td class="mono" style="font-size:0.78rem; color:var(--muted);">${escapeHtml(e.ip || '—')}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-
-  const totalPages = Math.max(1, Math.ceil(data.total / data.limit));
-  pager.innerHTML = `
-    <button class="btn-secondary" id="audit-prev" ${data.page <= 1 ? 'disabled' : ''}>← Previous</button>
-    <span class="mono" style="align-self:center; color:var(--muted); font-size:0.85rem;">Page ${data.page} of ${totalPages} · ${data.total} total</span>
-    <button class="btn-secondary" id="audit-next" ${data.page >= totalPages ? 'disabled' : ''}>Next →</button>
-  `;
-  document.getElementById('audit-prev')?.addEventListener('click', () => { auditLogPage -= 1; refreshAuditLog(); });
-  document.getElementById('audit-next')?.addEventListener('click', () => { auditLogPage += 1; refreshAuditLog(); });
-}
-
-// ---------- maintenance mode ----------
-
-let maintenanceCountdownTimer = null;
-
-async function loadMaintenance() {
-  const view = document.getElementById('maintenance-view');
-  view.innerHTML = `<div id="maintenance-wrap">Loading…</div>`;
-
-  try {
-    const status = await api('/api/maintenance');
-    renderMaintenance(status);
-  } catch (e) {
-    document.getElementById('maintenance-wrap').innerHTML = `<div class="empty-state">Could not load maintenance settings.</div>`;
-  }
-}
-
-function renderMaintenance(status) {
-  if (maintenanceCountdownTimer) clearInterval(maintenanceCountdownTimer);
-
-  const wrap = document.getElementById('maintenance-wrap');
-  const stateLabel = status.active ? 'Live — visitors are currently blocked' : status.scheduled ? 'Scheduled — not blocking yet' : 'Off — site is fully open';
-  const statePill = status.active ? 'pill-declined' : status.scheduled ? 'pill-in_review' : 'pill-approved';
-
-  wrap.innerHTML = `
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-        <div>
-          <span class="pill ${statePill}">${stateLabel}</span>
-        </div>
-        <div id="maintenance-countdown" class="mono" style="font-size:0.95rem; color:var(--coral); font-weight:700;"></div>
-      </div>
-      <p style="color:var(--muted); font-size:0.85rem;">
-        When on, every public API call — adoption/relinquishment/volunteer forms, the adoptable birds list, events,
-        announcements, and the community blog — is turned away with your message below. This admin panel stays
-        reachable to signed-in admins so you can always switch it back off.
-      </p>
-    </div>
-
-    <div class="card">
-      <label style="display:flex; align-items:center; gap:0.6rem; margin-top:0;">
-        <input type="checkbox" id="maintenance-enabled" ${status.enabled ? 'checked' : ''} style="width:auto;" />
-        Turn on maintenance mode
-      </label>
-
-      <label>Message shown to visitors</label>
-      <textarea id="maintenance-message" rows="2">${escapeHtml(status.message)}</textarea>
-
-      <div class="field-grid">
-        <div class="half">
-          <label>Start (optional)</label>
-          <input id="maintenance-starts" type="datetime-local" value="${fmtDateInput(status.starts_at)}" />
-        </div>
-        <div class="half">
-          <label>End (optional)</label>
-          <input id="maintenance-ends" type="datetime-local" value="${fmtDateInput(status.ends_at)}" />
-        </div>
-      </div>
-      <p style="color:var(--muted); font-size:0.8rem; margin-top:0.4rem;">
-        Leave start blank to apply immediately once you save. Leave end blank to stay on until you manually turn it off —
-        set an end time and it switches back off automatically (and a countdown shows visitors when to expect it back).
-      </p>
-
-      <div class="error-text" id="maintenance-error"></div>
-      <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
-        <button class="btn-primary" id="save-maintenance-btn">Save</button>
-      </div>
-    </div>
-  `;
-
-  startMaintenanceCountdown(status);
-
-  document.getElementById('save-maintenance-btn').addEventListener('click', async () => {
-    const errorEl = document.getElementById('maintenance-error');
-    errorEl.textContent = '';
-
-    const enabled = document.getElementById('maintenance-enabled').checked;
-    const message = document.getElementById('maintenance-message').value;
-    const startsRaw = document.getElementById('maintenance-starts').value;
-    const endsRaw = document.getElementById('maintenance-ends').value;
-
-    const payload = {
-      enabled,
-      message,
-      starts_at: startsRaw ? new Date(startsRaw).toISOString() : null,
-      ends_at: endsRaw ? new Date(endsRaw).toISOString() : null,
-    };
-
-    if (payload.starts_at && payload.ends_at && new Date(payload.starts_at) >= new Date(payload.ends_at)) {
-      errorEl.textContent = 'The end time must be after the start time.';
-      return;
-    }
-
-    try {
-      const updated = await api('/api/maintenance', { method: 'PUT', body: JSON.stringify(payload) });
-      toast(enabled ? 'Maintenance mode saved.' : 'Maintenance mode turned off.');
-      renderMaintenance(updated);
-    } catch (err) {
-      errorEl.textContent = err.message;
-    }
-  });
-}
-
-function startMaintenanceCountdown(status) {
-  const el = document.getElementById('maintenance-countdown');
-  if (!el) return;
-
-  // Anchor the countdown to server time (not the browser's clock) so it
-  // stays accurate even if the visitor's system clock is off.
-  const skewMs = Date.now() - new Date(status.server_time).getTime();
-
-  function tick() {
-    const now = Date.now() - skewMs;
-    if (status.active && status.ends_at) {
-      const diff = new Date(status.ends_at).getTime() - now;
-      el.textContent = diff > 0 ? `Back online in ${formatCountdown(diff)}` : 'Ending…';
-      if (diff <= 0) { clearInterval(maintenanceCountdownTimer); loadMaintenance(); }
-    } else if (status.scheduled && status.starts_at) {
-      const diff = new Date(status.starts_at).getTime() - now;
-      el.textContent = diff > 0 ? `Starts in ${formatCountdown(diff)}` : 'Starting…';
-      if (diff <= 0) { clearInterval(maintenanceCountdownTimer); loadMaintenance(); }
-    } else {
-      el.textContent = '';
-    }
-  }
-
-  tick();
-  maintenanceCountdownTimer = setInterval(tick, 1000);
-}
-
-function formatCountdown(ms) {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const pad = (n) => String(n).padStart(2, '0');
-  if (days > 0) return `${days}d ${pad(hours)}h ${pad(minutes)}m`;
-  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 }
 
 boot();

@@ -171,6 +171,7 @@ button {
 }
 .pill-new { background: rgba(217,136,114,0.25); color: #f0b9a8; }
 .pill-in_review { background: rgba(143,180,214,0.22); color: #aecfe8; }
+.pill-needs_info { background: rgba(224,177,74,0.25); color: #f0d19c; }
 .pill-approved { background: rgba(107,150,120,0.28); color: #a8dab6; }
 .pill-declined { background: rgba(224,114,104,0.25); color: #f0aca4; }
 .pill-archived { background: rgba(154,167,159,0.2); color: #c7d1cb; }

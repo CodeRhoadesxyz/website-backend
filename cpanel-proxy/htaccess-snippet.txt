@@ -1,0 +1,18 @@
+# --- Heart & Soul Rescue admin proxy ---
+# Add these lines inside your existing .htaccess in the site's document root
+# (the same folder this file and rescue-proxy.php live in). Do NOT delete or
+# replace your current .htaccess — just paste this block into it, ideally
+# near the top, before any existing catch-all rewrite rules.
+
+RewriteEngine On
+
+# Anything under /admin (the dashboard HTML/CSS/JS) goes through the proxy.
+RewriteCond %{REQUEST_URI} ^/admin(/.*)?$
+RewriteRule ^ rescue-proxy.php [L]
+
+# Anything under /api (the actual backend calls the admin dashboard makes)
+# also goes through the proxy, so login/cookies work on this same domain.
+RewriteCond %{REQUEST_URI} ^/api(/.*)?$
+RewriteRule ^ rescue-proxy.php [L]
+
+# --- end Heart & Soul Rescue admin proxy ---
