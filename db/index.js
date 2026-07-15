@@ -285,6 +285,14 @@ addColumnIfMissing('birds', "sponsor_url TEXT DEFAULT ''");
 addColumnIfMissing('admins', "email TEXT DEFAULT ''");
 addColumnIfMissing('admins', "reset_token TEXT");
 addColumnIfMissing('admins', "reset_token_expires TEXT");
+// NULL = full access to every tab (the default for every existing admin —
+// this feature is opt-in-to-restrict, not opt-in-to-allow, so nobody loses
+// access the moment this ships). Only the super admin (SUPER_ADMIN_USERNAME)
+// can ever set this, via PATCH /api/admin-users/:id/permissions. Shape:
+// '{"events": {"view": true, "edit": false}, ...}' — a tab missing from the
+// object entirely is also treated as full access; only tabs explicitly
+// listed are restricted.
+addColumnIfMissing('admins', 'tab_permissions TEXT');
 
 try {
   db.exec(`UPDATE users SET username = LOWER(username) WHERE username != LOWER(username)`);

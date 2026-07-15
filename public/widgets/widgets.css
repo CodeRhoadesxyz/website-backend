@@ -1,3 +1,15 @@
+:root {
+  /* Same palette as .rescue-widget below, exposed at :root too since a
+     couple of widgets (user-nav.js, admin-badge.js) render their markup
+     straight onto <body> rather than inside a .rescue-widget container,
+     so they can't see variables scoped only to that class. */
+  --rw-canopy: #4f7358;
+  --rw-canopy-dark: #1f3a2c;
+  --rw-coral: #d98872;
+  --rw-danger: #c1554a;
+  --rw-line: #dde3d6;
+}
+
 .rescue-widget {
   /* Matched to the live site: sage forest green + dusty coral + warm cream, pill buttons */
   --rw-canopy: #4f7358;
@@ -866,4 +878,38 @@
   .rw-modal { background: #1c2420; }
   .rw-modal-close { background: rgba(255,255,255,0.08); color: #ece7da; }
   .rw-modal-close:hover { background: rgba(255,255,255,0.16); }
+
+  /* --- Site-wide account nav (login/signup badge) --- */
+  .rw-nav-link-btn {
+    background: #1c2420;
+    border-color: rgba(255,255,255,0.2);
+    color: #f2efe6;
+  }
+  .rw-nav-link-btn:hover { background: rgba(255,255,255,0.08); }
+  .rw-nav-signup-btn:hover { background: #6d9679; }
+
+  .rw-nav-account-btn {
+    background: #1c2420;
+    border-color: rgba(255,255,255,0.2);
+  }
+  .rw-nav-account-btn:hover { background: rgba(255,255,255,0.08); }
+  .rw-nav-name { color: #f2efe6; }
+
+  .rw-nav-dropdown {
+    background: #1c2420;
+    border-color: rgba(255,255,255,0.2);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  }
+  .rw-nav-dropdown-item { color: #f2efe6; }
+  .rw-nav-dropdown-item:hover { background: rgba(255,255,255,0.08); }
+  .rw-nav-dropdown-item.rw-nav-logout { color: #f0aca4; }
+  .rw-nav-dropdown-item.rw-nav-logout:hover { background: rgba(224,114,104,0.15); }
+
+  .rw-nav-inline-form label { color: #c9c9c9; }
+  .rw-nav-inline-form input {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.2);
+    color: #f2efe6;
+  }
+  .rw-nav-inline-form button[type="submit"]:hover { background: #6d9679; }
 }

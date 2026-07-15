@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireUser, attachIdentity } = require('../middleware/auth');
+const { requireUser, attachIdentity, hasTabPermission } = require('../middleware/auth');
 const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
@@ -105,6 +105,13 @@ router.delete('/:id', attachIdentity, (req, res) => {
   const isOwner = req.user && req.user.id === post.user_id;
   if (!isOwner && !req.admin) {
     return res.status(403).json({ error: 'Not allowed to delete this post.' });
+  }
+
+  if (!isOwner && req.admin) {
+    const adminRow = db.prepare('SELECT username, tab_permissions FROM admins WHERE id = ?').get(req.admin.id);
+    if (!adminRow || !hasTabPermission(adminRow, 'community', 'edit')) {
+      return res.status(403).json({ error: "You don't have access to moderate Community. Ask your super admin for access." });
+    }
   }
 
   db.prepare('DELETE FROM posts WHERE id = ?').run(req.params.id);

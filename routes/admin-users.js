@@ -1,18 +1,43 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const { requireSuperAdmin, ALL_TABS } = require('../middleware/auth');
 const { summarizeActivity } = require('../lib/activityLog');
 
 const router = express.Router();
 
-router.get('/', requireAdmin, (req, res) => {
-  const admins = db.prepare('SELECT id, username, email, created_at FROM admins ORDER BY created_at ASC').all();
+// Managing admin accounts — including who can see/touch what — is
+// restricted to the super admin (SUPER_ADMIN_USERNAME) only, for every
+// route in this file. This isn't something the super admin can delegate:
+// if any regular admin could create/edit other admins or grant
+// permissions, they could just grant themselves full access and this whole
+// system would mean nothing.
+router.use(requireSuperAdmin);
+
+router.get('/', (req, res) => {
+  const admins = db.prepare('SELECT id, username, email, tab_permissions, created_at FROM admins ORDER BY created_at ASC').all();
   const superUsername = (process.env.SUPER_ADMIN_USERNAME || '').toLowerCase();
-  res.json(admins.map((a) => ({ ...a, is_super_admin: superUsername !== '' && a.username.toLowerCase() === superUsername })));
+  res.json(
+    admins.map((a) => {
+      let tab_permissions = null;
+      try {
+        tab_permissions = a.tab_permissions ? JSON.parse(a.tab_permissions) : null;
+      } catch (err) {
+        tab_permissions = null;
+      }
+      return {
+        id: a.id,
+        username: a.username,
+        email: a.email,
+        created_at: a.created_at,
+        tab_permissions,
+        is_super_admin: superUsername !== '' && a.username.toLowerCase() === superUsername,
+      };
+    })
+  );
 });
 
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', (req, res) => {
   const { username, password, email } = req.body || {};
 
   if (!username || !password) {
@@ -40,7 +65,7 @@ router.post('/', requireAdmin, (req, res) => {
 });
 
 // --- Edit an admin account (username and/or password) ---
-router.patch('/:id', requireAdmin, (req, res) => {
+router.patch('/:id', (req, res) => {
   const admin = db.prepare('SELECT * FROM admins WHERE id = ?').get(req.params.id);
   if (!admin) return res.status(404).json({ error: 'Admin not found.' });
 
@@ -82,7 +107,50 @@ router.patch('/:id', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
-router.delete('/:id', requireAdmin, (req, res) => {
+// --- Set which tabs an admin can view/edit ---
+// Body shape: { tab_permissions: { "events": { "view": true, "edit": false }, ... } }
+// or { tab_permissions: null } to clear all restrictions (full access again).
+// Only tabs in ALL_TABS are accepted; anything else is rejected outright
+// rather than silently dropped, so a typo doesn't quietly do nothing.
+router.patch('/:id/permissions', (req, res) => {
+  const admin = db.prepare('SELECT * FROM admins WHERE id = ?').get(req.params.id);
+  if (!admin) return res.status(404).json({ error: 'Admin not found.' });
+
+  const superUsername = (process.env.SUPER_ADMIN_USERNAME || '').toLowerCase();
+  if (superUsername && admin.username.toLowerCase() === superUsername) {
+    return res.status(400).json({ error: 'The super admin always has full access — permissions cannot be restricted on this account.' });
+  }
+
+  const { tab_permissions } = req.body || {};
+
+  if (tab_permissions === null) {
+    db.prepare('UPDATE admins SET tab_permissions = NULL WHERE id = ?').run(req.params.id);
+    return res.json({ id: admin.id, tab_permissions: null });
+  }
+
+  if (typeof tab_permissions !== 'object' || Array.isArray(tab_permissions)) {
+    return res.status(400).json({ error: 'tab_permissions must be an object (or null to clear restrictions).' });
+  }
+
+  const cleaned = {};
+  for (const [tab, entry] of Object.entries(tab_permissions)) {
+    if (!ALL_TABS.includes(tab)) {
+      return res.status(400).json({ error: `Unknown tab: "${tab}".` });
+    }
+    if (!entry || typeof entry !== 'object') {
+      return res.status(400).json({ error: `Invalid permission entry for "${tab}".` });
+    }
+    cleaned[tab] = { view: entry.view !== false, edit: entry.edit !== false };
+    // Editing something you can't view doesn't make sense — keep the two
+    // consistent so a stray client bug can't produce edit-but-not-view.
+    if (!cleaned[tab].view) cleaned[tab].edit = false;
+  }
+
+  db.prepare('UPDATE admins SET tab_permissions = ? WHERE id = ?').run(JSON.stringify(cleaned), req.params.id);
+  res.json({ id: admin.id, tab_permissions: cleaned });
+});
+
+router.delete('/:id', (req, res) => {
   const targetId = Number(req.params.id);
 
   if (targetId === req.admin.id) {
@@ -100,7 +168,7 @@ router.delete('/:id', requireAdmin, (req, res) => {
 });
 
 // --- List one admin's recent undoable actions across the whole panel ---
-router.get('/:id/activity', requireAdmin, (req, res) => {
+router.get('/:id/activity', (req, res) => {
   const admin = db.prepare('SELECT id, username FROM admins WHERE id = ?').get(req.params.id);
   if (!admin) return res.status(404).json({ error: 'Admin not found.' });
 
@@ -140,7 +208,7 @@ function isRealTable(table) {
 }
 
 // --- Undo a batch of one admin's actions in one go ---
-router.post('/:id/activity/undo', requireAdmin, (req, res) => {
+router.post('/:id/activity/undo', (req, res) => {
   const admin = db.prepare('SELECT id FROM admins WHERE id = ?').get(req.params.id);
   if (!admin) return res.status(404).json({ error: 'Admin not found.' });
 

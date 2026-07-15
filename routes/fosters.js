@@ -1,11 +1,11 @@
 const express = require('express');
 const db = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, requireTabPermission } = require('../middleware/auth');
 const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
 
-router.get('/', requireAdmin, (req, res) => {
+router.get('/', requireAdmin, requireTabPermission('fosters'), (req, res) => {
   const { bird_id, active } = req.query;
 
   let query = `
@@ -26,7 +26,7 @@ router.get('/', requireAdmin, (req, res) => {
   res.json(db.prepare(query).all(...params));
 });
 
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', requireAdmin, requireTabPermission('fosters'), (req, res) => {
   const { bird_id, foster_name, foster_contact, start_date, notes } = req.body || {};
 
   if (!bird_id || !foster_name || !start_date) {
@@ -47,7 +47,7 @@ router.post('/', requireAdmin, (req, res) => {
   res.status(201).json(created);
 });
 
-router.patch('/:id', requireAdmin, (req, res) => {
+router.patch('/:id', requireAdmin, requireTabPermission('fosters'), (req, res) => {
   const existing = db.prepare('SELECT * FROM fosters WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Foster record not found.' });
 
@@ -75,7 +75,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
-router.delete('/:id', requireAdmin, (req, res) => {
+router.delete('/:id', requireAdmin, requireTabPermission('fosters'), (req, res) => {
   const existing = db.prepare('SELECT * FROM fosters WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Foster record not found.' });
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, requireTabPermission } = require('../middleware/auth');
 const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
@@ -13,7 +13,7 @@ router.get('/', (req, res) => {
   res.json(db.prepare(query).all());
 });
 
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', requireAdmin, requireTabPermission('wishlist'), (req, res) => {
   const { item_name, description, quantity_needed } = req.body || {};
   if (!item_name) return res.status(400).json({ error: 'Item name is required.' });
 
@@ -26,7 +26,7 @@ router.post('/', requireAdmin, (req, res) => {
   res.status(201).json(created);
 });
 
-router.patch('/:id', requireAdmin, (req, res) => {
+router.patch('/:id', requireAdmin, requireTabPermission('wishlist'), (req, res) => {
   const existing = db.prepare('SELECT * FROM wishlist_items WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Item not found.' });
 
@@ -53,7 +53,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
-router.delete('/:id', requireAdmin, (req, res) => {
+router.delete('/:id', requireAdmin, requireTabPermission('wishlist'), (req, res) => {
   const existing = db.prepare('SELECT * FROM wishlist_items WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Item not found.' });
 

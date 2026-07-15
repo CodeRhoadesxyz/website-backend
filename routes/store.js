@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, requireTabPermission } = require('../middleware/auth');
 const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
@@ -23,7 +23,7 @@ router.get('/', (req, res) => {
 });
 
 // --- Admin: create ---
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', requireAdmin, requireTabPermission('store'), (req, res) => {
   const { name, description, price, sale_price, is_on_sale, is_clearance, is_sold_out, image_url, buy_url, is_published } =
     req.body || {};
 
@@ -62,7 +62,7 @@ router.post('/', requireAdmin, (req, res) => {
 });
 
 // --- Admin: update (including starting/ending a sale or clearance) ---
-router.patch('/:id', requireAdmin, (req, res) => {
+router.patch('/:id', requireAdmin, requireTabPermission('store'), (req, res) => {
   const existing = db.prepare('SELECT * FROM store_items WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Item not found.' });
 
@@ -108,7 +108,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
 });
 
 // --- Admin: delete ---
-router.delete('/:id', requireAdmin, (req, res) => {
+router.delete('/:id', requireAdmin, requireTabPermission('store'), (req, res) => {
   const existing = db.prepare('SELECT * FROM store_items WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Item not found.' });
 

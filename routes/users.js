@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
-const { requireUser, requireAdmin } = require('../middleware/auth');
+const { requireUser, requireAdmin, requireTabPermission } = require('../middleware/auth');
 const { sendPasswordResetEmail } = require('../lib/mailer');
 const { logActivity } = require('../lib/activityLog');
 
@@ -192,7 +192,7 @@ router.patch('/me', requireUser, (req, res) => {
   res.json(publicUser(updated));
 });
 
-router.get('/', requireAdmin, (req, res) => {
+router.get('/', requireAdmin, requireTabPermission('community'), (req, res) => {
   const users = db
     .prepare(
       `SELECT u.id, u.username, u.display_name, u.role, u.email, u.is_banned, u.created_at,
@@ -204,7 +204,7 @@ router.get('/', requireAdmin, (req, res) => {
   res.json(users);
 });
 
-router.patch('/:id', requireAdmin, (req, res) => {
+router.patch('/:id', requireAdmin, requireTabPermission('community'), (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
@@ -227,7 +227,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
-router.delete('/:id', requireAdmin, (req, res) => {
+router.delete('/:id', requireAdmin, requireTabPermission('community'), (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found.' });
 

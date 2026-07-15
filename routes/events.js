@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, requireTabPermission } = require('../middleware/auth');
 const { notifyAdminNewRsvp } = require('../lib/mailer');
 const { logActivity } = require('../lib/activityLog');
 
@@ -66,7 +66,7 @@ router.post('/:id/rsvp', (req, res) => {
   res.status(201).json({ id: result.lastInsertRowid, message: 'RSVP received.' });
 });
 
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', requireAdmin, requireTabPermission('events'), (req, res) => {
   const { title, description, location, start_time, end_time, image_url, capacity, is_published } =
     req.body || {};
 
@@ -95,7 +95,7 @@ router.post('/', requireAdmin, (req, res) => {
   res.status(201).json(created);
 });
 
-router.patch('/:id', requireAdmin, (req, res) => {
+router.patch('/:id', requireAdmin, requireTabPermission('events'), (req, res) => {
   const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Event not found.' });
 
@@ -128,7 +128,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
-router.delete('/:id', requireAdmin, (req, res) => {
+router.delete('/:id', requireAdmin, requireTabPermission('events'), (req, res) => {
   const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Event not found.' });
 
@@ -137,7 +137,7 @@ router.delete('/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/:id/rsvps', requireAdmin, (req, res) => {
+router.get('/:id/rsvps', requireAdmin, requireTabPermission('events'), (req, res) => {
   const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
   if (!event) return res.status(404).json({ error: 'Event not found.' });
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, requireTabPermission } = require('../middleware/auth');
 const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
@@ -41,7 +41,7 @@ router.get('/:id', (req, res) => {
   res.json(bird);
 });
 
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', requireAdmin, requireTabPermission('birds'), (req, res) => {
   const { name, species, age, sex, description, photo_url, status, is_published, sponsor_url } = req.body || {};
 
   if (!name || !species) {
@@ -74,7 +74,7 @@ router.post('/', requireAdmin, (req, res) => {
   res.status(201).json(created);
 });
 
-router.patch('/:id', requireAdmin, (req, res) => {
+router.patch('/:id', requireAdmin, requireTabPermission('birds'), (req, res) => {
   const existing = db.prepare('SELECT * FROM birds WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Bird not found.' });
 
@@ -111,7 +111,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
-router.delete('/:id', requireAdmin, (req, res) => {
+router.delete('/:id', requireAdmin, requireTabPermission('birds'), (req, res) => {
   const existing = db.prepare('SELECT * FROM birds WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Bird not found.' });
 

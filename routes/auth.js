@@ -55,8 +55,16 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/me', requireAdmin, (req, res) => {
-  const admin = db.prepare('SELECT id, username, email FROM admins WHERE id = ?').get(req.admin.id);
-  res.json(admin);
+  const admin = db.prepare('SELECT id, username, email, tab_permissions FROM admins WHERE id = ?').get(req.admin.id);
+  const superUsername = (process.env.SUPER_ADMIN_USERNAME || '').toLowerCase();
+  const is_super_admin = superUsername !== '' && admin.username.toLowerCase() === superUsername;
+  let tab_permissions = null;
+  try {
+    tab_permissions = admin.tab_permissions ? JSON.parse(admin.tab_permissions) : null;
+  } catch (err) {
+    tab_permissions = null;
+  }
+  res.json({ id: admin.id, username: admin.username, email: admin.email, is_super_admin, tab_permissions });
 });
 
 // Lets a signed-in admin set/update their own email — needed before

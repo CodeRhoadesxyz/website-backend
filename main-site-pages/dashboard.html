@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Dashboard — Heart & Soul Parrot Rescue</title>
+
+<!--
+  This page replaces your old separate blog.html AND dashboard.html.
+  It's one page with two sections: "My Applications & Chats" and
+  "Community". Delete blog.html from your site once this is live, and set
+  up a redirect from /blog.html to /dashboard.html (or /dashboard.html#community)
+  so any old links/bookmarks still land somewhere useful.
+
+  Update the two spots below marked API_BASE_URL to your actual backend URL
+  (e.g. https://your-app.up.railway.app), and make sure your header/nav
+  links to "My applications & chats" / "Community" both point at this same
+  file (see the updated user-nav.js snippet in README.md).
+-->
+
+<link rel="stylesheet" href="API_BASE_URL/widgets/widgets.css">
+
+<style>
+  /* Swap in your site's real header/footer/fonts — this is just a minimal
+     shell so the widgets below have something sensible to sit inside. */
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #faf7f0;
+    margin: 0;
+    padding: 2rem 1rem 4rem;
+    color: #1f3a2c;
+  }
+  .dash-header {
+    max-width: 720px;
+    margin: 0 auto 1.5rem;
+    text-align: center;
+  }
+  .dash-header h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    margin-bottom: 0.25rem;
+  }
+  .dash-tabs {
+    max-width: 720px;
+    margin: 0 auto 1.75rem;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .dash-tab-btn {
+    border: 1px solid #dde3d6;
+    background: #fff;
+    color: #1f3a2c;
+    border-radius: 999px;
+    padding: 0.55rem 1.25rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .dash-tab-btn.active {
+    background: #4f7358;
+    border-color: #4f7358;
+    color: #fff;
+  }
+  .dash-section { display: none; }
+  .dash-section.active { display: block; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #14201a; color: #f2efe6; }
+    .dash-tab-btn { background: #1c2420; border-color: rgba(255,255,255,0.2); color: #f2efe6; }
+    .dash-tab-btn.active { background: #4f7358; border-color: #4f7358; color: #fff; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="dash-header">
+    <h1>My Dashboard</h1>
+    <p>Check your application status, chat with our team, and catch up on Community posts — all in one place.</p>
+  </div>
+
+  <div class="dash-tabs">
+    <button class="dash-tab-btn active" id="tab-btn-applications" type="button">My Applications &amp; Chats</button>
+    <button class="dash-tab-btn" id="tab-btn-community" type="button">Community</button>
+  </div>
+
+  <div class="dash-section active" id="tab-applications">
+    <div id="rescue-my-applications"></div>
+  </div>
+
+  <div class="dash-section" id="tab-community">
+    <div id="rescue-blog"></div>
+  </div>
+
+  <script src="API_BASE_URL/widgets/shared.js"></script>
+  <script src="API_BASE_URL/widgets/my-applications.js" data-api-base="https://heartandsoulparrotrescue.com"></script>
+  <script src="API_BASE_URL/widgets/blog.js" data-api-base="https://heartandsoulparrotrescue.com"></script>
+
+  <script>
+    // Simple tab switcher — just shows/hides the two sections. Doesn't
+    // touch either widget's own internals, so both keep working exactly
+    // as documented in README.md.
+    const tabButtons = {
+      applications: document.getElementById('tab-btn-applications'),
+      community: document.getElementById('tab-btn-community'),
+    };
+    const tabSections = {
+      applications: document.getElementById('tab-applications'),
+      community: document.getElementById('tab-community'),
+    };
+
+    function showTab(name) {
+      Object.keys(tabSections).forEach((key) => {
+        tabSections[key].classList.toggle('active', key === name);
+        tabButtons[key].classList.toggle('active', key === name);
+      });
+      history.replaceState(null, '', name === 'community' ? '#community' : '#applications');
+    }
+
+    tabButtons.applications.addEventListener('click', () => showTab('applications'));
+    tabButtons.community.addEventListener('click', () => showTab('community'));
+
+    // Deep-link support: /dashboard.html#community jumps straight to the
+    // Community tab (useful for the redirect from the old blog.html, and
+    // for the "Community" link in user-nav.js).
+    if (window.location.hash === '#community') showTab('community');
+  </script>
+
+</body>
+</html>

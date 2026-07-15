@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, requireTabPermission } = require('../middleware/auth');
 const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
@@ -18,7 +18,7 @@ router.get('/latest', (req, res) => {
   res.json(announcement || null);
 });
 
-router.get('/', requireAdmin, (req, res) => {
+router.get('/', requireAdmin, requireTabPermission('announcements'), (req, res) => {
   const rows = db.prepare('SELECT * FROM announcements ORDER BY created_at DESC').all();
   const cutoff = Date.now() - EXPIRY_DAYS * 24 * 60 * 60 * 1000;
   const withActiveFlag = rows.map((row) => {
@@ -28,7 +28,7 @@ router.get('/', requireAdmin, (req, res) => {
   res.json(withActiveFlag);
 });
 
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', requireAdmin, requireTabPermission('announcements'), (req, res) => {
   const { title, message, link_url, link_text, image_url, is_published } = req.body || {};
 
   if (!title || !message) {
@@ -47,7 +47,7 @@ router.post('/', requireAdmin, (req, res) => {
   res.status(201).json(created);
 });
 
-router.patch('/:id', requireAdmin, (req, res) => {
+router.patch('/:id', requireAdmin, requireTabPermission('announcements'), (req, res) => {
   const existing = db.prepare('SELECT * FROM announcements WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Announcement not found.' });
 
@@ -80,7 +80,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
-router.delete('/:id', requireAdmin, (req, res) => {
+router.delete('/:id', requireAdmin, requireTabPermission('announcements'), (req, res) => {
   const existing = db.prepare('SELECT * FROM announcements WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Announcement not found.' });
 

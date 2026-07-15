@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, requireTabPermission } = require('../middleware/auth');
 const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
@@ -26,7 +26,7 @@ router.post('/', (req, res) => {
   res.status(201).json({ id: result.lastInsertRowid, message: 'Thank you! Your story will appear once reviewed.' });
 });
 
-router.patch('/:id', requireAdmin, (req, res) => {
+router.patch('/:id', requireAdmin, requireTabPermission('testimonials'), (req, res) => {
   const existing = db.prepare('SELECT * FROM testimonials WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Testimonial not found.' });
 
@@ -39,7 +39,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
-router.delete('/:id', requireAdmin, (req, res) => {
+router.delete('/:id', requireAdmin, requireTabPermission('testimonials'), (req, res) => {
   const existing = db.prepare('SELECT * FROM testimonials WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Testimonial not found.' });
 

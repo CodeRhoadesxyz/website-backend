@@ -26,6 +26,14 @@ const TAB_TITLES = {
   store: 'Store',
 };
 
+// Tabs that can be individually granted/restricted per admin — everything
+// in the sidebar except Home (always visible, read-only overview) and
+// Admins (hardcoded to the super admin only, never delegable).
+const PERMISSION_TABS = [
+  'adoption', 'relinquishment', 'volunteer', 'birds', 'fosters', 'events',
+  'announcements', 'wishlist', 'testimonials', 'faqs', 'store', 'community',
+];
+
 let currentTab = 'adoption';
 
 // ---------- helpers ----------
@@ -144,15 +152,43 @@ function attachImageUploadHandlers(inputId) {
 // ---------- boot ----------
 
 let currentAdminId = null;
+let currentAdminMe = null;
+
+function canViewTab(tab) {
+  if (!currentAdminMe || currentAdminMe.is_super_admin) return true;
+  const perms = currentAdminMe.tab_permissions;
+  if (!perms || !perms[tab]) return true;
+  return perms[tab].view !== false;
+}
+
+function canEditTab(tab) {
+  if (!currentAdminMe || currentAdminMe.is_super_admin) return true;
+  const perms = currentAdminMe.tab_permissions;
+  if (!perms || !perms[tab]) return true;
+  return perms[tab].edit !== false;
+}
 
 async function boot() {
   try {
     const me = await api('/api/auth/me');
     currentAdminId = me.id;
+    currentAdminMe = me;
     document.getElementById('signed-in-as').textContent = `Signed in as ${me.username}`;
   } catch (e) {
     return; // api() already redirected
   }
+
+  // Hide sidebar tabs this admin can't view at all, and the Admins tab
+  // entirely for anyone but the super admin — that one isn't part of the
+  // regular per-tab system, it's hardcoded (see requireSuperAdmin).
+  document.querySelectorAll('.nav-tab[data-tab]').forEach((el) => {
+    const tab = el.dataset.tab;
+    if (tab === 'admins') {
+      el.style.display = currentAdminMe.is_super_admin ? '' : 'none';
+    } else if (tab !== 'home' && !canViewTab(tab)) {
+      el.style.display = 'none';
+    }
+  });
 
   document.querySelectorAll('.nav-tab[data-tab]').forEach((tab) => {
     tab.addEventListener('click', () => switchTab(tab.dataset.tab));
@@ -167,6 +203,14 @@ async function boot() {
 }
 
 function switchTab(tab) {
+  if (tab === 'admins' && !(currentAdminMe && currentAdminMe.is_super_admin)) {
+    toast("Admin access is restricted to the super admin.");
+    tab = 'home';
+  } else if (tab !== 'home' && tab !== 'admins' && !canViewTab(tab)) {
+    toast("You don't have access to that tab. Ask your super admin for access.");
+    tab = 'home';
+  }
+
   currentTab = tab;
   document.querySelectorAll('.nav-tab[data-tab]').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
   document.getElementById('view-title').textContent = TAB_TITLES[tab];
@@ -180,6 +224,17 @@ function switchTab(tab) {
   const showAndLoad = (id, loadFn) => {
     document.getElementById(id).style.display = 'block';
     loadFn();
+    // View-only tabs (view allowed, edit not) get a small heads-up banner.
+    // The server is what actually enforces this — this is just so the
+    // person isn't surprised when an Add/Edit/Delete button fails.
+    if (tab !== 'home' && tab !== 'admins' && canViewTab(tab) && !canEditTab(tab)) {
+      const container = document.getElementById(id);
+      const banner = document.createElement('div');
+      banner.className = 'empty-state';
+      banner.style.cssText = 'margin-bottom:1rem; text-align:left; padding:0.75rem 1rem;';
+      banner.textContent = "View only — you can look but not add, edit, or delete here. Ask your super admin for edit access.";
+      container.prepend(banner);
+    }
   };
 
   if (tab === 'home') showAndLoad('home-view', loadHome);
@@ -196,6 +251,14 @@ function switchTab(tab) {
   else {
     document.getElementById('app-view').style.display = 'block';
     loadApplications(tab);
+    if (canViewTab(tab) && !canEditTab(tab)) {
+      const container = document.getElementById('app-view');
+      const banner = document.createElement('div');
+      banner.className = 'empty-state';
+      banner.style.cssText = 'margin-bottom:1rem; text-align:left; padding:0.75rem 1rem;';
+      banner.textContent = "View only — you can look but not edit or delete here. Ask your super admin for edit access.";
+      container.prepend(banner);
+    }
   }
 }
 
@@ -1373,6 +1436,7 @@ function renderAdminsTable(admins) {
             <td>${a.email ? escapeHtml(a.email) : '<span style="color:var(--muted);">Not set — can\'t use "forgot password"</span>'}</td>
             <td style="white-space:nowrap;">
               <button class="btn-secondary" data-edit-admin="${a.id}" data-username="${escapeHtml(a.username)}" data-email="${escapeHtml(a.email || '')}" style="margin-right:0.4rem;">Edit</button>
+              ${a.is_super_admin ? '' : `<button class="btn-secondary" data-permissions-admin="${a.id}" data-username="${escapeHtml(a.username)}" style="margin-right:0.4rem;">Permissions</button>`}
               ${a.is_super_admin ? '' : `<button class="btn-secondary" data-undo-actions="${a.id}" data-username="${escapeHtml(a.username)}" style="margin-right:0.4rem;">Undo actions</button>`}
               ${a.id === currentAdminId
                 ? `<span style="color:var(--muted); font-size:0.82rem;">Can't remove your own account</span>`
@@ -1383,12 +1447,16 @@ function renderAdminsTable(admins) {
       </tbody>
     </table>
     <p style="color:var(--muted); font-size:0.82rem; margin-top:0.75rem;">
-      Anyone added here can sign in to this entire admin panel — applications, events, community moderation, everything. Only add people you trust with full access.
+      Anyone added here can sign in to the admin panel. By default a new admin can view and edit every tab — use <strong>Permissions</strong> on their row to restrict them to specific tabs. Only the super admin (${currentAdminMe && currentAdminMe.is_super_admin ? escapeHtml(currentAdminMe.username) : 'the account set as SUPER_ADMIN_USERNAME'}) can manage admin accounts or set permissions.
     </p>
   `;
 
   wrap.querySelectorAll('[data-edit-admin]').forEach((btn) =>
     btn.addEventListener('click', () => openEditAdminModal(btn.dataset.editAdmin, btn.dataset.username, btn.dataset.email))
+  );
+
+  wrap.querySelectorAll('[data-permissions-admin]').forEach((btn) =>
+    btn.addEventListener('click', () => openPermissionsModal(admins.find((a) => a.id == btn.dataset.permissionsAdmin)))
   );
 
   wrap.querySelectorAll('[data-undo-actions]').forEach((btn) =>
@@ -1496,6 +1564,103 @@ async function openUndoActionsModal(adminId, username) {
       closeModal();
     } catch (err) {
       alert(`Undo failed: ${err.message}`);
+    }
+  });
+}
+
+function openPermissionsModal(admin) {
+  if (!admin) return;
+  const perms = admin.tab_permissions || {};
+
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Permissions — ${escapeHtml(admin.username)}</h3>
+          <button class="btn-ghost" id="modal-close" aria-label="Close">✕</button>
+        </div>
+        <p style="color:var(--muted); font-size:0.85rem; margin-top:0;">
+          Unchecked "View" hides that tab from their sidebar entirely. "View" without "Edit" lets
+          them look but not add, change, or delete anything there.
+        </p>
+        <div style="max-height:50vh; overflow-y:auto;">
+          <table>
+            <thead><tr><th>Tab</th><th style="text-align:center;">View</th><th style="text-align:center;">Edit</th></tr></thead>
+            <tbody>
+              ${PERMISSION_TABS.map((tab) => {
+                const entry = perms[tab] || { view: true, edit: true };
+                return `
+                  <tr>
+                    <td>${escapeHtml(TAB_TITLES[tab] || tab)}</td>
+                    <td style="text-align:center;"><input type="checkbox" data-perm-view="${tab}" style="width:auto;" ${entry.view !== false ? 'checked' : ''} /></td>
+                    <td style="text-align:center;"><input type="checkbox" data-perm-edit="${tab}" style="width:auto;" ${entry.edit !== false ? 'checked' : ''} /></td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="error-text" id="permissions-error"></div>
+        <div style="display:flex; justify-content:space-between; margin-top:1.25rem;">
+          <button class="btn-secondary" id="permissions-reset-btn">Reset to full access</button>
+          <button class="btn-primary" id="permissions-save-btn">Save permissions</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Edit implies view — flipping Edit on should turn View back on too, and
+  // turning View off should turn Edit off, so the checkboxes can't drift
+  // into a state the server would reject.
+  document.querySelectorAll('[data-perm-edit]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        document.querySelector(`[data-perm-view="${cb.dataset.permEdit}"]`).checked = true;
+      }
+    });
+  });
+  document.querySelectorAll('[data-perm-view]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      if (!cb.checked) {
+        document.querySelector(`[data-perm-edit="${cb.dataset.permView}"]`).checked = false;
+      }
+    });
+  });
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-backdrop') closeModal();
+  });
+
+  document.getElementById('permissions-reset-btn').addEventListener('click', async () => {
+    try {
+      await api(`/api/admin-users/${admin.id}/permissions`, { method: 'PATCH', body: JSON.stringify({ tab_permissions: null }) });
+      toast(`${admin.username} now has full access to every tab.`);
+      closeModal();
+      loadAdmins();
+    } catch (err) {
+      document.getElementById('permissions-error').textContent = err.message;
+    }
+  });
+
+  document.getElementById('permissions-save-btn').addEventListener('click', async () => {
+    const errorEl = document.getElementById('permissions-error');
+    errorEl.textContent = '';
+
+    const tab_permissions = {};
+    PERMISSION_TABS.forEach((tab) => {
+      const view = document.querySelector(`[data-perm-view="${tab}"]`).checked;
+      const edit = document.querySelector(`[data-perm-edit="${tab}"]`).checked;
+      tab_permissions[tab] = { view, edit: view && edit };
+    });
+
+    try {
+      await api(`/api/admin-users/${admin.id}/permissions`, { method: 'PATCH', body: JSON.stringify({ tab_permissions }) });
+      toast(`Permissions saved for ${admin.username}.`);
+      closeModal();
+      loadAdmins();
+    } catch (err) {
+      errorEl.textContent = err.message;
     }
   });
 }

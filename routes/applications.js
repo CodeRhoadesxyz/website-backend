@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireAdmin, requireUser, attachIdentity } = require('../middleware/auth');
+const { requireAdmin, requireUser, attachIdentity, hasTabPermission } = require('../middleware/auth');
 const { notifyAdminNewApplication } = require('../lib/mailer');
 const { logActivity } = require('../lib/activityLog');
 
@@ -8,6 +8,29 @@ const router = express.Router();
 
 const VALID_TYPES = ['adoption', 'relinquishment', 'volunteer'];
 const VALID_STATUSES = ['new', 'in_review', 'needs_info', 'approved', 'declined', 'archived'];
+
+// Applications don't have their own "tab" in the permission system — each
+// type (adoption/relinquishment/volunteer) IS its own tab, matching the
+// three separate sidebar entries in the admin panel. For routes keyed by
+// :id, the type has to be looked up first since it isn't in the URL.
+function requireApplicationTypeAccess(req, res, next) {
+  if (!req.admin) return next(); // applicant-facing paths handle their own auth separately
+  const action = ['GET', 'HEAD'].includes(req.method) ? 'view' : 'edit';
+
+  let type = req.query.type;
+  if (!type && req.params.id) {
+    const row = db.prepare('SELECT type FROM applications WHERE id = ?').get(req.params.id);
+    if (!row) return next(); // let the route's own 404 handling report this
+    type = row.type;
+  }
+  if (!type || !VALID_TYPES.includes(type)) return next(); // route's own validation will reject an unknown/missing type
+
+  const adminRow = db.prepare('SELECT username, tab_permissions FROM admins WHERE id = ?').get(req.admin.id);
+  if (!adminRow || !hasTabPermission(adminRow, type, action)) {
+    return res.status(403).json({ error: `You don't have access to ${type} applications. Ask your super admin for access.` });
+  }
+  next();
+}
 
 const REQUIRED_FIELDS = {
   adoption: ['fullName', 'email', 'phone'],
@@ -60,7 +83,7 @@ router.get('/mine', requireUser, (req, res) => {
   res.json(rows.map((row) => ({ ...row, data: JSON.parse(row.data) })));
 });
 
-router.get('/', requireAdmin, (req, res) => {
+router.get('/', requireAdmin, requireApplicationTypeAccess, (req, res) => {
   const { type, status, search } = req.query;
 
   let query = 'SELECT * FROM applications WHERE 1=1';
@@ -91,13 +114,13 @@ router.get('/', requireAdmin, (req, res) => {
   res.json(applications);
 });
 
-router.get('/:id', requireAdmin, (req, res) => {
+router.get('/:id', requireAdmin, requireApplicationTypeAccess, (req, res) => {
   const row = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Application not found.' });
   res.json({ ...row, data: JSON.parse(row.data) });
 });
 
-router.patch('/:id', requireAdmin, (req, res) => {
+router.patch('/:id', requireAdmin, requireApplicationTypeAccess, (req, res) => {
   const { status, admin_notes } = req.body || {};
   const row = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Application not found.' });
@@ -125,7 +148,7 @@ router.patch('/:id', requireAdmin, (req, res) => {
   res.json({ ...updated, data: JSON.parse(updated.data) });
 });
 
-router.delete('/:id', requireAdmin, (req, res) => {
+router.delete('/:id', requireAdmin, requireApplicationTypeAccess, (req, res) => {
   const row = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Application not found.' });
 
@@ -144,7 +167,7 @@ function canAccessApplication(req, application) {
   return false;
 }
 
-router.get('/:id/messages', attachIdentity, (req, res) => {
+router.get('/:id/messages', attachIdentity, requireApplicationTypeAccess, (req, res) => {
   const application = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
   if (!application) return res.status(404).json({ error: 'Application not found.' });
   if (!canAccessApplication(req, application)) {
@@ -157,7 +180,7 @@ router.get('/:id/messages', attachIdentity, (req, res) => {
   res.json(messages);
 });
 
-router.post('/:id/messages', attachIdentity, (req, res) => {
+router.post('/:id/messages', attachIdentity, requireApplicationTypeAccess, (req, res) => {
   const application = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
   if (!application) return res.status(404).json({ error: 'Application not found.' });
   if (!canAccessApplication(req, application)) {
