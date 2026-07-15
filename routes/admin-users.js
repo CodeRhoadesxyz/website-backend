@@ -51,7 +51,7 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'Please enter a valid email address.' });
   }
 
-  const existing = db.prepare('SELECT id FROM admins WHERE username = ?').get(username);
+  const existing = db.prepare('SELECT id FROM admins WHERE username = ? COLLATE NOCASE').get(username);
   if (existing) {
     return res.status(409).json({ error: 'That username is already taken.' });
   }
@@ -75,7 +75,7 @@ router.patch('/:id', (req, res) => {
   if (username !== undefined) {
     const trimmed = username.trim();
     if (!trimmed) return res.status(400).json({ error: 'Username cannot be empty.' });
-    const existing = db.prepare('SELECT id FROM admins WHERE username = ? AND id != ?').get(trimmed, req.params.id);
+    const existing = db.prepare('SELECT id FROM admins WHERE username = ? COLLATE NOCASE AND id != ?').get(trimmed, req.params.id);
     if (existing) return res.status(409).json({ error: 'That username is already taken.' });
     updates.username = trimmed;
   }

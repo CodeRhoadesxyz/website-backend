@@ -19,13 +19,13 @@ if (password.length < 8) {
 }
 
 const passwordHash = bcrypt.hashSync(password, 12);
-const existing = db.prepare('SELECT id FROM admins WHERE username = ?').get(username);
+const existing = db.prepare('SELECT id FROM admins WHERE username = ? COLLATE NOCASE').get(username);
 
 if (existing) {
   if (email) {
-    db.prepare('UPDATE admins SET password_hash = ?, email = ? WHERE username = ?').run(passwordHash, email.trim().toLowerCase(), username);
+    db.prepare('UPDATE admins SET password_hash = ?, email = ? WHERE id = ?').run(passwordHash, email.trim().toLowerCase(), existing.id);
   } else {
-    db.prepare('UPDATE admins SET password_hash = ? WHERE username = ?').run(passwordHash, username);
+    db.prepare('UPDATE admins SET password_hash = ? WHERE id = ?').run(passwordHash, existing.id);
   }
   console.log(`Updated admin "${username}".`);
 } else {

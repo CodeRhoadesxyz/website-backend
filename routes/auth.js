@@ -35,7 +35,7 @@ router.post('/login', (req, res) => {
     return res.status(400).json({ error: 'Username and password are required.' });
   }
 
-  const admin = db.prepare('SELECT * FROM admins WHERE username = ?').get(username);
+  const admin = db.prepare('SELECT * FROM admins WHERE username = ? COLLATE NOCASE').get(username);
 
   if (!admin || !bcrypt.compareSync(password, admin.password_hash)) {
     return res.status(401).json({ error: 'Incorrect username or password.' });
@@ -88,7 +88,7 @@ router.post('/forgot-password', (req, res) => {
   const { username } = req.body || {};
   if (!username) return res.status(400).json({ error: 'Username is required.' });
 
-  const admin = db.prepare('SELECT * FROM admins WHERE username = ?').get(username.trim().toLowerCase());
+  const admin = db.prepare('SELECT * FROM admins WHERE username = ? COLLATE NOCASE').get(username.trim());
 
   // Always the same response whether or not the account exists (or has an
   // email on file) — otherwise this endpoint becomes a way to check which
