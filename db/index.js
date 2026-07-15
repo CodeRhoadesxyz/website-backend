@@ -282,6 +282,9 @@ addColumnIfMissing('users', "email TEXT DEFAULT ''");
 addColumnIfMissing('users', "reset_token TEXT");
 addColumnIfMissing('users', "reset_token_expires TEXT");
 addColumnIfMissing('birds', "sponsor_url TEXT DEFAULT ''");
+addColumnIfMissing('admins', "email TEXT DEFAULT ''");
+addColumnIfMissing('admins', "reset_token TEXT");
+addColumnIfMissing('admins', "reset_token_expires TEXT");
 
 try {
   db.exec(`UPDATE users SET username = LOWER(username) WHERE username != LOWER(username)`);

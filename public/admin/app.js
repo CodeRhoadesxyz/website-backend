@@ -1360,7 +1360,7 @@ function renderAdminsTable(admins) {
   const wrap = document.getElementById('admins-table-wrap');
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Created</th><th>Username</th><th></th></tr></thead>
+      <thead><tr><th>Created</th><th>Username</th><th>Email</th><th></th></tr></thead>
       <tbody>
         ${admins.map((a) => `
           <tr>
@@ -1370,8 +1370,9 @@ function renderAdminsTable(admins) {
               ${a.id === currentAdminId ? ' <span class="pill pill-approved">You</span>' : ''}
               ${a.is_super_admin ? ' <span class="pill pill-new">Super admin</span>' : ''}
             </td>
+            <td>${a.email ? escapeHtml(a.email) : '<span style="color:var(--muted);">Not set — can\'t use "forgot password"</span>'}</td>
             <td style="white-space:nowrap;">
-              <button class="btn-secondary" data-edit-admin="${a.id}" data-username="${escapeHtml(a.username)}" style="margin-right:0.4rem;">Edit</button>
+              <button class="btn-secondary" data-edit-admin="${a.id}" data-username="${escapeHtml(a.username)}" data-email="${escapeHtml(a.email || '')}" style="margin-right:0.4rem;">Edit</button>
               ${a.is_super_admin ? '' : `<button class="btn-secondary" data-undo-actions="${a.id}" data-username="${escapeHtml(a.username)}" style="margin-right:0.4rem;">Undo actions</button>`}
               ${a.id === currentAdminId
                 ? `<span style="color:var(--muted); font-size:0.82rem;">Can't remove your own account</span>`
@@ -1387,7 +1388,7 @@ function renderAdminsTable(admins) {
   `;
 
   wrap.querySelectorAll('[data-edit-admin]').forEach((btn) =>
-    btn.addEventListener('click', () => openEditAdminModal(btn.dataset.editAdmin, btn.dataset.username))
+    btn.addEventListener('click', () => openEditAdminModal(btn.dataset.editAdmin, btn.dataset.username, btn.dataset.email))
   );
 
   wrap.querySelectorAll('[data-undo-actions]').forEach((btn) =>
@@ -1499,7 +1500,7 @@ async function openUndoActionsModal(adminId, username) {
   });
 }
 
-function openEditAdminModal(id, currentUsername) {
+function openEditAdminModal(id, currentUsername, currentEmail) {
   document.getElementById('modal-root').innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal">
@@ -1509,6 +1510,8 @@ function openEditAdminModal(id, currentUsername) {
         </div>
         <label>Username</label>
         <input id="edit-admin-username" value="${escapeHtml(currentUsername)}" />
+        <label>Email</label>
+        <input id="edit-admin-email" type="email" value="${escapeHtml(currentEmail || '')}" placeholder="Needed for \"forgot password\" to work" />
         <label>New password (optional)</label>
         <input id="edit-admin-password" type="password" placeholder="Leave blank to keep current password" />
         <div class="error-text" id="edit-admin-error"></div>
@@ -1526,6 +1529,7 @@ function openEditAdminModal(id, currentUsername) {
 
   document.getElementById('save-admin-btn').addEventListener('click', async () => {
     const username = document.getElementById('edit-admin-username').value.trim();
+    const email = document.getElementById('edit-admin-email').value.trim();
     const password = document.getElementById('edit-admin-password').value;
     const errorEl = document.getElementById('edit-admin-error');
     errorEl.textContent = '';
@@ -1535,7 +1539,7 @@ function openEditAdminModal(id, currentUsername) {
       return;
     }
 
-    const payload = { username };
+    const payload = { username, email };
     if (password) payload.password = password;
 
     try {
@@ -1559,6 +1563,8 @@ function openAddAdminModal() {
         </div>
         <label>Username</label>
         <input id="new-admin-username" />
+        <label>Email</label>
+        <input id="new-admin-email" type="email" placeholder="Needed for \"forgot password\" to work" />
         <label>Password</label>
         <input id="new-admin-password" type="password" placeholder="At least 8 characters" />
         <div class="error-text" id="new-admin-error"></div>
@@ -1576,12 +1582,13 @@ function openAddAdminModal() {
 
   document.getElementById('create-admin-btn').addEventListener('click', async () => {
     const username = document.getElementById('new-admin-username').value.trim();
+    const email = document.getElementById('new-admin-email').value.trim();
     const password = document.getElementById('new-admin-password').value;
     const errorEl = document.getElementById('new-admin-error');
     errorEl.textContent = '';
 
     try {
-      await api('/api/admin-users', { method: 'POST', body: JSON.stringify({ username, password }) });
+      await api('/api/admin-users', { method: 'POST', body: JSON.stringify({ username, email, password }) });
       toast('Admin added.');
       closeModal();
       loadAdmins();
