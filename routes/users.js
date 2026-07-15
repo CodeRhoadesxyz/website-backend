@@ -103,7 +103,12 @@ router.post('/forgot-password', (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.trim().toLowerCase());
 
   // Always respond the same way whether or not the email is registered, so
-  // this can't be used to check which emails have accounts.
+  // this can't be used to check which emails have accounts. This log is
+  // server-side only (never sent to the client) and exists purely so you
+  // can tell, from the deploy logs, whether a reset request even matched an
+  // account — otherwise this whole flow is silent by design and hard to debug.
+  console.log(`Password reset requested for "${email.trim().toLowerCase()}" — account found: ${Boolean(user)}`);
+
   if (user) {
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
