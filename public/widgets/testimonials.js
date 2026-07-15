@@ -74,14 +74,57 @@
         <input name="bird_name" placeholder="Which bird did you adopt?" />
         <label>Your story</label>
         <textarea name="story" rows="4" required placeholder="Tell us how it's going!"></textarea>
-        <label>Photo URL (optional)</label>
-        <input name="photo_url" placeholder="https://..." />
+        <label>Your photo (optional)</label>
+        <input type="file" id="rw-story-photo-file" accept="image/jpeg,image/png,image/webp,image/gif" />
+        <div id="rw-story-photo-status" class="rw-testimonial-photo-status"></div>
+        <div id="rw-story-photo-preview"></div>
         <div class="rw-error" id="rw-story-error"></div>
         <button type="submit">Submit story</button>
       </form>
     `;
     const form = document.getElementById('rw-story-form');
     const errorEl = document.getElementById('rw-story-error');
+    const fileInput = document.getElementById('rw-story-photo-file');
+    const statusEl = document.getElementById('rw-story-photo-status');
+    const preview = document.getElementById('rw-story-photo-preview');
+    const submitBtn = form.querySelector('button[type="submit"]');
+
+    let uploadedPhotoUrl = '';
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      uploadedPhotoUrl = '';
+      statusEl.textContent = 'Uploading…';
+      preview.innerHTML = '';
+      submitBtn.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+        // Raw fetch, not postJson — a multipart upload needs the browser to
+        // set its own Content-Type boundary, which postJson's fixed
+        // 'application/json' header would break.
+        const res = await fetch(`${apiBase}/api/upload/public`, {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Upload failed.');
+
+        uploadedPhotoUrl = `${apiBase}${data.url}`;
+        statusEl.textContent = 'Photo attached ✓';
+        preview.innerHTML = `<img src="${uploadedPhotoUrl}" alt="" style="max-height:90px; border-radius:10px; margin-top:0.4rem;" />`;
+      } catch (err) {
+        statusEl.textContent = '';
+        errorEl.textContent = err.message;
+        fileInput.value = '';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorEl.textContent = '';
@@ -90,7 +133,7 @@
           author_name: form.author_name.value.trim(),
           bird_name: form.bird_name.value.trim(),
           story: form.story.value.trim(),
-          photo_url: form.photo_url.value.trim(),
+          photo_url: uploadedPhotoUrl,
         });
         slot.innerHTML = `<div class="rw-success">${escapeHtml(result.message)}</div>`;
       } catch (err) {

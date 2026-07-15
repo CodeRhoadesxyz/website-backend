@@ -281,6 +281,22 @@
 
 /* --- Testimonials --- */
 .rescue-widget.rw-testimonial-wrap { max-width: none; width: 100%; margin: 0; }
+.rw-testimonial-share-btn {
+  background: #ffffff;
+  color: var(--rw-canopy-dark, #1f3a2c);
+  border: 1px solid var(--rw-line, #dde3d6);
+  border-radius: 999px;
+  padding: 0.65rem 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+  box-shadow: 0 0 10px rgba(255,255,255,0.9), 0 0 22px rgba(255,255,255,0.55);
+  transition: box-shadow 0.25s ease, transform 0.2s ease;
+}
+.rw-testimonial-share-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px rgba(255,255,255,1), 0 0 32px rgba(255,255,255,0.75);
+}
 .rw-testimonial-header {
   text-align: center;
   max-width: 640px;
@@ -367,6 +383,7 @@
 .rw-testimonial-bird { color: #6b6b6b; font-weight: 500; }
 .rw-testimonial-date { font-size: 0.78rem; color: #999; margin-top: 0.2rem; }
 #rw-story-form-slot .rw-blog-inline-form { max-width: 480px; margin: 0 auto 2rem; text-align: left; }
+.rw-testimonial-photo-status { font-size: 0.82rem; color: var(--rw-canopy, #4f7358); margin-top: 0.3rem; }
 
 /* --- FAQ --- */
 .rw-faq-item {
@@ -886,7 +903,7 @@
   .rescue-widget .rw-wishlist-item { border-color: rgba(255,255,255,0.15); }
   .rescue-widget .rw-wishlist-desc { color: #c9c9c9; }
 
-  .rescue-widget .rw-testimonial-card { background: #1c2420; border-color: rgba(255,255,255,0.15); box-shadow: 0 4px 18px rgba(0,0,0,0.25); }
+  .rescue-widget .rw-testimonial-card { background: linear-gradient(160deg, rgba(255,255,255,0.14) 0%, rgba(0,0,0,0.55) 100%); border-color: rgba(255,255,255,0.15); box-shadow: 0 4px 18px rgba(0,0,0,0.25); }
   .rescue-widget .rw-testimonial-story { color: #ddd8ca; }
   .rescue-widget .rw-testimonial-meta { color: #9fd1ac; }
   .rescue-widget .rw-testimonial-subhead,
@@ -894,6 +911,7 @@
   .rescue-widget .rw-testimonial-bird { color: #c9c9c9; }
   .rescue-widget .rw-testimonial-date { color: #8a8a8a; }
   .rescue-widget .rw-testimonial-photo { border-color: rgba(255,255,255,0.18); }
+  .rescue-widget .rw-testimonial-share-btn { border-color: rgba(255,255,255,0.35); }
 
   .rescue-widget .rw-faq-item { border-color: rgba(255,255,255,0.15); }
   .rescue-widget .rw-faq-question { color: #f2efe6; }

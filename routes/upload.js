@@ -50,4 +50,22 @@ router.post('/', requireAdmin, (req, res) => {
   });
 });
 
+// --- Public: upload a single image with no admin session required.
+// Used by public-facing widgets (e.g. the testimonials "share your story"
+// form) so a visitor can attach their own photo instead of only being able
+// to paste an existing image URL. Same file-type/size limits as the admin
+// upload above — this does not grant any additional access, it just skips
+// the requireAdmin check for this one endpoint.
+router.post('/public', (req, res) => {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Upload failed.' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file was provided.' });
+    }
+    res.status(201).json({ url: `/uploads/${req.file.filename}` });
+  });
+});
+
 module.exports = { router, uploadsDir };
