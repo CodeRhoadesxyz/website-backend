@@ -1,8 +1,10 @@
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
+const { sendAdminPasswordResetEmail } = require('../lib/mailer');
 
 const router = express.Router();
 
@@ -13,6 +15,18 @@ const cookieOptions = {
   sameSite: 'lax',
   maxAge: 1000 * 60 * 60 * 12, // 12 hours
 };
+
+// Where the admin portal's reset-password.html page is publicly reachable —
+// used to build the link inside password reset emails. Falls back to a best
+// guess (first allowed origin + /admin/reset-password.html) if not set.
+function getAdminResetUrl(token) {
+  const base = process.env.ADMIN_PORTAL_URL || (() => {
+    const firstOrigin = (process.env.ALLOWED_ORIGINS || '').split(',')[0]?.trim();
+    return firstOrigin ? `${firstOrigin}/admin/reset-password.html` : null;
+  })();
+  if (!base) return null;
+  return `${base}${base.includes('?') ? '&' : '?'}token=${token}`;
+}
 
 router.post('/login', (req, res) => {
   const { username, password } = req.body || {};
@@ -41,7 +55,84 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/me', requireAdmin, (req, res) => {
-  res.json({ id: req.admin.id, username: req.admin.username });
+  const admin = db.prepare('SELECT id, username, email FROM admins WHERE id = ?').get(req.admin.id);
+  res.json(admin);
+});
+
+// Lets a signed-in admin set/update their own email — needed before
+// forgot-password can do anything for that account.
+router.patch('/me', requireAdmin, (req, res) => {
+  const { email } = req.body || {};
+  if (email === undefined) return res.status(400).json({ error: 'Nothing to update.' });
+
+  const trimmed = email.trim().toLowerCase();
+  if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
+  db.prepare('UPDATE admins SET email = ? WHERE id = ?').run(trimmed, req.admin.id);
+  const updated = db.prepare('SELECT id, username, email FROM admins WHERE id = ?').get(req.admin.id);
+  res.json(updated);
+});
+
+// --- Request a password reset email ---
+router.post('/forgot-password', (req, res) => {
+  const { username } = req.body || {};
+  if (!username) return res.status(400).json({ error: 'Username is required.' });
+
+  const admin = db.prepare('SELECT * FROM admins WHERE username = ?').get(username.trim().toLowerCase());
+
+  // Always the same response whether or not the account exists (or has an
+  // email on file) — otherwise this endpoint becomes a way to check which
+  // admin usernames are valid. The console log is server-side only, purely
+  // so you can tell from the deploy logs whether a request even matched.
+  console.log(`Admin password reset requested for "${username}" — account found: ${Boolean(admin)}, has email: ${Boolean(admin && admin.email)}`);
+
+  if (admin && admin.email) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+    db.prepare('UPDATE admins SET reset_token = ?, reset_token_expires = ? WHERE id = ?').run(
+      tokenHash,
+      expires,
+      admin.id
+    );
+
+    const resetUrl = getAdminResetUrl(token);
+    if (resetUrl) {
+      sendAdminPasswordResetEmail(admin, resetUrl);
+    } else {
+      console.warn('Admin password reset requested but ADMIN_PORTAL_URL/ALLOWED_ORIGINS is not set — cannot build a reset link.');
+    }
+  }
+
+  res.json({ message: 'If that account exists and has an email on file, a reset link has been sent.' });
+});
+
+// --- Complete a password reset using the token from the email ---
+router.post('/reset-password', (req, res) => {
+  const { token, password } = req.body || {};
+  if (!token || !password) {
+    return res.status(400).json({ error: 'Reset token and new password are required.' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const admin = db.prepare('SELECT * FROM admins WHERE reset_token = ?').get(tokenHash);
+
+  if (!admin || !admin.reset_token_expires || new Date(admin.reset_token_expires) < new Date()) {
+    return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+  }
+
+  const passwordHash = bcrypt.hashSync(password, 12);
+  db.prepare(
+    'UPDATE admins SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?'
+  ).run(passwordHash, admin.id);
+
+  res.json({ message: 'Password updated — you can now log in with your new password.' });
 });
 
 module.exports = router;
